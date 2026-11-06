@@ -407,7 +407,10 @@ export class ReviewSession implements vscode.Disposable {
       step,
       blocks,
       hotspots,
-      messages,
+      // Parsed again: replies kept by an older version get today's reading of their cues
+      messages: messages.map((message) =>
+        message.role === 'claude' ? { ...message, sentences: parseReply(message.text) } : message
+      ),
       model
     });
     this.nextId = 1 + Math.max(0, ...messages.map((message) => Number(message.id.slice(1)) || 0));

@@ -60,10 +60,28 @@ describe('parseReply', () => {
   });
 });
 
+describe('cues with brackets in their paths', () => {
+  it('GIVEN SvelteKit and Next.js routes WHEN parsed THEN each cue holds its whole path', () => {
+    const cues = cuesOf(
+      parseReply(
+        '[[show packages/web/src/routes/(protected)/[eventId]/reschedule/+page.server.ts#L14-51]] La query. ' +
+          '[[open src/routes/[[lang]]/+page.svelte#L3]] Qui. [[refs app/[...slug]/page.tsx#L4 load]].'
+      )
+    );
+
+    expect(cues.map((cue) => [cue.path, cue.start, cue.end, cue.symbol])).toEqual([
+      ['packages/web/src/routes/(protected)/[eventId]/reschedule/+page.server.ts', 14, 51, null],
+      ['src/routes/[[lang]]/+page.svelte', 3, 3, null],
+      ['app/[...slug]/page.tsx', 4, 4, 'load']
+    ]);
+  });
+});
+
 describe('speakable', () => {
   it('GIVEN markdown, code and links WHEN made speakable THEN only the words remain', () => {
     expect(speakable('**Attenzione**: `src/lib/price.ts` usa [questo](https://x.y) - ok')).toBe(
       'Attenzione: price.ts usa questo - ok'
     );
+    expect(speakable('Vedi [[show a/b(c.ts#L2]] qui')).toBe('Vedi qui');
   });
 });

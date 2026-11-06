@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Cues on paths with brackets, such as SvelteKit's `routes/[eventId]/+page.server.ts`, work: they open
+  their diff and show as chips instead of raw text, and the voice no longer reads them. Replies already
+  in a review are read again when it opens.
+
 ## 0.4.0
 
 - Every review in progress is kept, each with its own Claude session, and listed on the start screen

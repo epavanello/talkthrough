@@ -4,8 +4,13 @@
  */
 import type { Cue, CueKind, Part, Sentence } from '@talkthrough/shared';
 
+/**
+ * `[[show path#L10-20]]`, `[[open path#L5]]`, `[[refs path#L40 symbol]]`. Paths may hold brackets
+ * (`routes/[eventId]/+page.ts`, `routes/[[lang]]/+layout.ts`): a `]]` followed by `/` or `]` is part
+ * of the path, not the cue's end.
+ */
 const CUE =
-  /\[\[\s*(show|open|refs)\s+([^\s\]#]+)(?:#L(\d+)(?:-L?(\d+))?)?(?:\s+([^\]]*?))?\s*\]\]/g;
+  /\[\[\s*(show|open|refs)\s+(\S+?)(?:#L(\d+)(?:-L?(\d+))?)?(?:\s+([^\]\n]*?))?\s*\]\](?![/\]])/g;
 const FENCE = /```([\w+-]*)[^\n]*\n([\s\S]*?)```/g;
 /** A sentence ends at . ! ? … (also before a closing quote or parenthesis), or at a line break. */
 const BOUNDARY = /([.!?…]+["'”’)\]]*)(\s+)|(\n+)/g;
@@ -111,6 +116,7 @@ export const cuesOf = (sentences: Sentence[]) =>
 /** Words as the voice should say them: no markdown, links, paths or bullets. */
 export function speakable(text: string) {
   return text
+    .replace(/\[\[\s*(?:show|open|refs)\s[^\n]*?\]\](?![/\]])/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/`([^`]*)`/g, (_, code: string) => code.replace(/^.*\//, ''))
     .replace(/(\*\*|__|\*|_|~~)(\S[\s\S]*?\S|\S)\1/g, '$2')
