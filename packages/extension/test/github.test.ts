@@ -53,7 +53,8 @@ describe('githubRepo', () => {
 describe('searchPulls', () => {
   const bin = mkdtempSync(path.join(tmpdir(), 'talkthrough-gh-'));
   const calls = path.join(bin, 'calls.log');
-  const path0 = process.env.PATH;
+  // gh's active account is the one gh runs with: no token of ours in the way (CI sets GH_TOKEN)
+  const env0 = { PATH: process.env.PATH, GH_TOKEN: process.env.GH_TOKEN };
 
   beforeAll(() => {
     // gh's active account can't read the repository; its other account can
@@ -82,10 +83,12 @@ else if (args[0] === 'api') {
 `
     );
     chmodSync(path.join(bin, 'gh'), 0o755);
-    process.env.PATH = `${bin}:${path0}`;
+    process.env.PATH = `${bin}:${env0.PATH}`;
+    delete process.env.GH_TOKEN;
   });
   afterAll(() => {
-    process.env.PATH = path0;
+    Object.assign(process.env, env0);
+    if (env0.GH_TOKEN === undefined) delete process.env.GH_TOKEN;
     rmSync(bin, { recursive: true, force: true });
   });
 
