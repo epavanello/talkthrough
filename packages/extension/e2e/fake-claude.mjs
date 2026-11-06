@@ -8,6 +8,7 @@
  * Like the real one, it draws its screen with cursor moves between words. Test switches:
  * - FAKE_CLAUDE_FAILS: a file holding a count; while above 0, a resume finds no conversation.
  * - FAKE_CLAUDE_TRUST: a file; while missing, the folder isn't trusted and a trust dialog shows.
+ * - FAKE_CLAUDE_LIST_DELAY: ms before the MCP tools are listed, after SessionStart.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -96,11 +97,6 @@ async function tool(name, args = {}) {
 
 /** What a first turn does: read the PR, draw the map. */
 async function prepare() {
-  await rpc('initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'fake', version: '0' }
-  });
   const overview = await tool('pr_overview');
   const byFile = [...overview.matchAll(/^- (\S+).*: (.+)$/gm)].map((match) => ({
     path: match[1],
@@ -227,5 +223,15 @@ process.stdin.on('data', (data) => {
 });
 
 await runHook('SessionStart', { source: resume ? 'resume' : 'startup', model });
+// Like Claude Code: the MCP servers connect after SessionStart, and their tools are listed
+await rpc('initialize', {
+  protocolVersion: '2025-06-18',
+  capabilities: {},
+  clientInfo: { name: 'fake', version: '0' }
+});
+await new Promise((resolve) =>
+  setTimeout(resolve, Number(process.env.FAKE_CLAUDE_LIST_DELAY ?? 0))
+);
+await rpc('tools/list', {});
 write('fake claude ready');
 if (firstPrompt) enqueue(firstPrompt);

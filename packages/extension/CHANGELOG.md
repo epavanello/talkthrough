@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- After a resume, a model or effort change, "Your turn" waits until Claude has its review tools: a
+  prompt sent sooner ran without them, and Claude said the Talkthrough server was disconnected.
+
 ## 0.4.1
 
 - Cues on paths with brackets, such as SvelteKit's `routes/[eventId]/+page.server.ts`, work: they open

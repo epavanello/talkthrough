@@ -357,6 +357,24 @@ describe('Talkthrough review session', function () {
     );
   });
 
+  it("GIVEN a resumed session WHEN Claude's tools are still connecting THEN it is not your turn yet", async () => {
+    process.env.FAKE_CLAUDE_LIST_DELAY = '1500';
+    try {
+      await api.session.end();
+
+      await api.session.resume();
+
+      await until(
+        () => state().activity === 'Connecting the review tools',
+        'Claude started, its tools connecting'
+      );
+      assert.equal(state().status, 'starting');
+      await until(() => state().status === 'ready', 'the tools listed');
+    } finally {
+      delete process.env.FAKE_CLAUDE_LIST_DELAY;
+    }
+  });
+
   it("GIVEN a resume while Claude's session is still closing WHEN it finds no conversation THEN it tries again and goes on", async () => {
     const fails = path.join(repo, '..', `fails-${Date.now()}`);
     writeFileSync(fails, '2');

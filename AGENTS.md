@@ -32,6 +32,9 @@ and webview, esbuild for the host, e2e in a real VS Code.
   new session, `--resume <uuid>` after) and runs `claude` through `resources/ptybridge.py`.
 - `server.ts` is the local HTTP server: `/hook/<event>` (curl from the hooks) and `/mcp` (stateless
   Streamable HTTP, hand-written JSON-RPC). Bearer token per session.
+- Claude Code connects its MCP servers after the SessionStart hook: a session is ready ("Your turn")
+  once it lists the stage's tools (`tools/list`, `onListed`), 10 s at most. A prompt sent sooner runs
+  without them, and Claude says the server is gone.
 - What Claude says arrives through the Stop hook (`last_assistant_message`), never by reading the
   screen. The screen is read only for dialogs, dictation outcomes ("No speech detected") and a resume
   that finds no conversation. Claude Code draws spaces with cursor moves (`No\x1b[4Gconversation`):

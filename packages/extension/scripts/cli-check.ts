@@ -35,6 +35,7 @@ const DIFF = `## src/price.ts · modified · +2 −1
 
 const server = new ReviewServer({
   tools: () => TOOLS,
+  onListed: () => log('mcp tools/list'),
   hook: async (event, payload) => {
     if (event === 'prompt') {
       log(`hook prompt: ${String(payload.prompt).slice(0, 60)}`);
@@ -168,6 +169,7 @@ const checks: [string, boolean][] = [
   ['UserPromptSubmit hook with the kickoff', has('hook prompt: Prepare the review')],
   ['UserPromptSubmit hook with the typed Next', has('hook prompt: Next')],
   ['PreToolUse hook', has('hook tool')],
+  ['MCP tools listed at startup', has('mcp tools/list')],
   ['MCP pr_overview called', has('mcp pr_overview')],
   ['MCP set_map accepted', map !== null],
   [

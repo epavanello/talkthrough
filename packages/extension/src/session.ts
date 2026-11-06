@@ -208,6 +208,9 @@ export class ReviewSession implements vscode.Disposable {
   private hasStarted = false;
   /** The running Claude showed a dialog: its exit is an answer, not a resume to try again. */
   private hasAsked = false;
+  /** The running Claude listed the stage's tools: a prompt before that would run without them. */
+  private isListed = false;
+  private listTimer: NodeJS.Timeout | undefined;
   /** The prompt on Claude's command line: shown as Talkthrough's, not the person's. */
   private autoPrompt: string | null = null;
   /** Bumped by every start, resume and stop: work for an older one stops where it is. */
@@ -250,6 +253,7 @@ export class ReviewSession implements vscode.Disposable {
       hook: (event, payload) => this.handleHook(event, payload),
       tools: () => TOOLS,
       callTool: (name, args) => this.callTool(name, args),
+      onListed: () => this.listed(),
       instructions:
         'The stage of a Talkthrough PR review: the PR, its hunks, the review map and the editor.'
     });
@@ -594,6 +598,9 @@ export class ReviewSession implements vscode.Disposable {
     );
     this.claude = claude;
     this.hasStarted = false;
+    this.isListed = false;
+    clearTimeout(this.listTimer);
+    this.listTimer = undefined;
     this.hasAsked = false;
     this.autoPrompt = mode.prompt ?? null;
     const startedAt = Date.now();
@@ -815,12 +822,7 @@ export class ReviewSession implements vscode.Disposable {
           this.state.model = payload.model;
           this.touch();
         }
-        // With no prompt on the command line, a resumed session is ready as it starts
-        if (
-          (this.state.status === 'starting' || this.state.status === 'waiting') &&
-          !this.autoPrompt
-        )
-          this.setStatus('ready', null);
+        this.readyWhenListed();
         this.changed();
         return undefined;
       case 'prompt':
@@ -835,6 +837,30 @@ export class ReviewSession implements vscode.Disposable {
       default:
         return undefined;
     }
+  }
+
+  /**
+   * With no prompt on its command line, a session that started takes the person's prompts once
+   * Claude Code has listed the stage's tools: it connects them after SessionStart, and a prompt sent
+   * meanwhile would run without them. 10 s at most.
+   */
+  private readyWhenListed() {
+    const isStarting = this.state.status === 'starting' || this.state.status === 'waiting';
+    if (!this.hasStarted || this.autoPrompt || !isStarting) return;
+    if (this.isListed) return this.setStatus('ready', null);
+    this.track('Connecting the review tools');
+    this.listTimer ??= setTimeout(() => {
+      this.listTimer = undefined;
+      this.listed();
+    }, 10_000);
+  }
+
+  private listed() {
+    this.isListed = true;
+    clearTimeout(this.listTimer);
+    this.listTimer = undefined;
+    // The tools count once Claude has read the answer
+    setTimeout(() => this.readyWhenListed(), 300);
   }
 
   private describeTool(name: string, input: unknown) {

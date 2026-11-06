@@ -28,6 +28,8 @@ export interface ServerHandlers {
   hook(event: string, payload: Record<string, unknown>): Promise<unknown>;
   tools(): ToolSpec[];
   callTool(name: string, args: Record<string, unknown>): Promise<ToolResult>;
+  /** Claude listed the tools: from then on its turns can use them. */
+  onListed?(): void;
   instructions?: string;
 }
 
@@ -153,6 +155,7 @@ export class ReviewServer {
       case 'ping':
         return reply({});
       case 'tools/list':
+        this.handlers.onListed?.();
         return reply({ tools: this.handlers.tools() });
       case 'tools/call': {
         const name = String(request.params?.name ?? '');
