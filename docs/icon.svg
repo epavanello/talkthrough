@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Talkthrough's store icon: a pull request's diff, talked through. Rendered to packages/extension/resources/icon.png -->
+  <rect width="128" height="128" rx="28" fill="#181818"/>
+  <path d="M28 28h52a14 14 0 0 1 14 14v30a14 14 0 0 1-14 14H54L36 100V86h-8a14 14 0 0 1-14-14V42a14 14 0 0 1 14-14z" fill="none" stroke="#3794ff" stroke-width="7" stroke-linejoin="round"/>
+  <g stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M30 50h12M36 44v12M52 50h26" stroke="#3fb950"/>
+    <path d="M30 66h12M52 66h18" stroke="#f85149"/>
+    <path d="M104 50a16 16 0 0 1 0 22M113 41a28 28 0 0 1 0 40" stroke="#3794ff"/>
+  </g>
+</svg>

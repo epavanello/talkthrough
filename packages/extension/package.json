@@ -1,0 +1,230 @@
+{
+  "name": "talkthrough",
+  "displayName": "Talkthrough — talk a PR review through with Claude",
+  "description": "Review a pull request by talking it through with Claude Code: native diffs on your real files, short spoken turns, and a memory of what is clear.",
+  "version": "0.4.0",
+  "publisher": "epavanello",
+  "license": "MIT",
+  "author": "Emanuele Pavanello",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/epavanello/talkthrough"
+  },
+  "homepage": "https://github.com/epavanello/talkthrough#readme",
+  "bugs": "https://github.com/epavanello/talkthrough/issues",
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#181818",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "pull request",
+    "code review",
+    "review",
+    "claude",
+    "claude code",
+    "voice",
+    "github"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "talkthrough",
+          "title": "Talkthrough",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "talkthrough": [
+        {
+          "type": "webview",
+          "id": "talkthrough.chat",
+          "name": "Review"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "talkthrough.start",
+        "title": "Start PR Review",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.resume",
+        "title": "Resume the Review",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.toggleMic",
+        "title": "Talk (start or stop dictation)",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.next",
+        "title": "Next: These Diffs Are Clear",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.pauseResume",
+        "title": "Pause or Resume the Voice",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.replay",
+        "title": "Replay the Last Message",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.showTerminal",
+        "title": "Show or Hide Claude's Terminal",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.openWorktree",
+        "title": "Open a Review Worktree at the PR Head",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.checkout",
+        "title": "Check Out the PR Here",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.update",
+        "title": "Update the Review to the PR's New Commits",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.stop",
+        "title": "End the Review Session",
+        "category": "Talkthrough"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "talkthrough.toggleMic",
+        "key": "ctrl+alt+space",
+        "when": "talkthrough.active"
+      },
+      {
+        "command": "talkthrough.next",
+        "key": "ctrl+alt+right",
+        "when": "talkthrough.active"
+      },
+      {
+        "command": "talkthrough.pauseResume",
+        "key": "ctrl+alt+p",
+        "when": "talkthrough.active"
+      },
+      {
+        "command": "talkthrough.replay",
+        "key": "ctrl+alt+r",
+        "when": "talkthrough.active"
+      }
+    ],
+    "configuration": {
+      "title": "Talkthrough",
+      "properties": {
+        "talkthrough.claudePath": {
+          "type": "string",
+          "default": "claude",
+          "markdownDescription": "The Claude Code CLI the review session runs, with your own sign-in."
+        },
+        "talkthrough.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Model of the review session: an alias (`fable`, `opus`, `sonnet`, `haiku`) or a full model name. Empty: your Claude Code default. Also picked in the chat's header."
+        },
+        "talkthrough.effort": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "markdownDescription": "Claude Code's effort level for the review session (`--effort`): higher thinks longer before it answers. Empty: Claude Code's default for the model. Also picked in the chat's header; your own default stays as it is."
+        },
+        "talkthrough.language": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Language of Claude's replies and of voice dictation (Claude Code's `language` setting), such as `italian`. Empty: the language of VS Code's interface."
+        },
+        "talkthrough.speech.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Read Claude's replies aloud as they arrive."
+        },
+        "talkthrough.speech.voice": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "A voice from `say -v '?'`. Empty: the system voice (System Settings → Accessibility → Spoken Content)."
+        },
+        "talkthrough.speech.rate": {
+          "type": "number",
+          "default": 185,
+          "description": "Speaking rate, in words per minute."
+        },
+        "talkthrough.syncViewed": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mark a file as Viewed on GitHub once all its hunks are ok."
+        },
+        "talkthrough.worktreeSetup": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "A command run in a new review worktree's window before you start, such as `pnpm install`, so IntelliSense and lint work there."
+        },
+        "talkthrough.disabledPlugins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "earshot@earshot"
+          ],
+          "markdownDescription": "Claude Code plugins turned off in the review session, such as a voice plugin that would read the replies a second time (`name@marketplace`)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "check": "tsc --noEmit -p .",
+    "test": "vitest run --dir test",
+    "cli-check": "esbuild scripts/cli-check.ts --bundle --platform=node --format=esm --outfile=.cache/cli-check.mjs --log-level=warning && node .cache/cli-check.mjs",
+    "package": "node scripts/readme.mjs && vsce package --no-dependencies --out talkthrough.vsix",
+    "e2e": "esbuild e2e/*.test.ts --bundle --platform=node --main-fields=module,main --format=cjs --external:vscode --outdir=.cache/e2e --out-extension:.js=.cjs --log-level=warning && vscode-test"
+  },
+  "devDependencies": {
+    "@talkthrough/shared": "workspace:*",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.0",
+    "@types/vscode": "1.100.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "@xterm/headless": "6.0.0",
+    "esbuild": "^0.28.2",
+    "ovsx": "^1.3.0",
+    "vitest": "^5.0.5"
+  }
+}
