@@ -2,6 +2,7 @@
 
 ## 0.5.1
 
+- The Tour button starts the tour: in 0.5.0 only Enter did.
 - Model and effort are on the start screen too: pick them before a review or a tour starts. While
   Claude works they are locked (a change restarts the session), and say so.
 - Your changes show how many files each scope holds; an empty one is greyed out and says why

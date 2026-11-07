@@ -53,8 +53,9 @@
           .join(' · ')
   );
 
-  const explain = (event: SubmitEvent) => {
-    event.preventDefault();
+  // The button starts it itself: a tooltip's trigger makes every button type="button", no submit
+  const explain = (event?: Event) => {
+    event?.preventDefault();
     const value = question.trim();
     if (!value || blocker || !changes) return;
     question = '';
@@ -108,7 +109,6 @@
       class="min-w-0 flex-1 rounded border border-input bg-input-background px-2 py-1 text-sm outline-none focus:border-ring disabled:opacity-50"
     />
     <Button
-      type="submit"
       size="sm"
       icon={Compass}
       hint={{
@@ -116,6 +116,7 @@
         body: 'Claude finds the code, draws a tour of it in the order it runs, and walks you through it, with the app beside it.'
       }}
       disabled={!question.trim() || Boolean(blocker) || !changes}
+      onclick={() => explain()}
     >
       Tour
     </Button>
