@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { ChevronLeft, Globe, RotateCw, Square, Terminal } from '@lucide/svelte';
+  import {
+    ChevronLeft,
+    Compass,
+    FileDiff,
+    Globe,
+    RotateCw,
+    Square,
+    Terminal
+  } from '@lucide/svelte';
   import { CHOICES, type Choice, type SessionStatus } from '@talkthrough/shared';
   import { app } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
@@ -67,13 +75,17 @@
         title={pr.url ? `${pr.title}: open it on GitHub` : pr.title}
         onclick={() => pr.url && host.openUrl(pr.url)}
       >
-        #{pr.number}
+        {#if app.kind === 'tour'}
+          <Compass class="mr-0.5 inline size-3.5 align-[-2px] text-muted-foreground" />
+        {:else if app.kind === 'changes'}
+          <FileDiff class="mr-0.5 inline size-3.5 align-[-2px] text-muted-foreground" />
+        {:else}
+          #{pr.number}
+        {/if}
         {pr.title}
       </button>
     {:else}
-      <span class="min-w-0 flex-1 truncate px-1 text-muted-foreground"
-        >Loading the pull request…</span
-      >
+      <span class="min-w-0 flex-1 truncate px-1 text-muted-foreground">Loading…</span>
     {/if}
     <Shortcuts />
     {#if app.state.browser}

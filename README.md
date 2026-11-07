@@ -4,7 +4,7 @@
 
 # Talkthrough
 
-**Review a pull request by talking it through with Claude, in VS Code.**
+**Review a pull request, your own changes, or how a feature works, by talking it through with Claude, in VS Code.**
 
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/epavanello.talkthrough?label=VS%20Code%20Marketplace&color=0a7bbb)](https://marketplace.visualstudio.com/items?itemName=epavanello.talkthrough)
 [![Open VSX](https://img.shields.io/open-vsx/v/epavanello/talkthrough?label=Open%20VSX&color=a60ee5)](https://open-vsx.org/extension/epavanello/talkthrough)
@@ -20,7 +20,7 @@ GitHub.
 
 <p align="center"><img src="docs/review.png" width="420" alt="A review in progress: the map of the PR in blocks, Claude's replies with their stage cues, the voice player and Talk / Next" /></p>
 
-## 🗣️ A conversation, not a tour
+## 🗣️ A conversation, a step at a time
 
 - **Short turns**: one to three sentences, then it's your turn. Ask anything ("who else calls this?",
   "is this tested?"), by voice or text.
@@ -46,6 +46,7 @@ GitHub.
 
 - **Reviews in progress** stay listed with their progress and last activity, each with its own Claude
   session: open one, even days later, in another window or worktree, and Claude remembers it.
+- **Your changes** and **Explain how something works** start a review of your own work or a tour.
 - **Pull requests** from GitHub's own lists: review requested from you, assigned, yours, all open, with
   search. A number or URL works too.
 
@@ -54,6 +55,22 @@ GitHub.
 The panel notices new commits on the PR (on focus, and every few minutes). **Update** keeps the state
 of every hunk whose change is the same, gathers the new or changed ones in a block _What changed since
 your review_ at the top of the map, and Claude, in the same session, explains only those.
+
+## 🧑‍💻 Your own changes, before the PR
+
+The same review on what you haven't pushed: **Staged** (what `git commit` would take),
+**Uncommitted** (staged or not, new files included) or **This branch** (everything since main,
+committed or not). Claude reviews them as a careful colleague would, and its hotspots flag what may be
+wrong or left over (a missing test, a debug line). Your repository is untouched: the changes are read
+from a copy of the index, as a commit no branch points to. Keep working while you review: the panel
+notices when your changes move, and **Update** reviews only what changed.
+
+## 🧭 Tours: how does this work?
+
+Ask a question ("how does the sign-up form work?") and Claude finds the code, draws a **tour** of it in
+the order it runs (entry point, UI, client logic, server, data), and walks you through it a stop at a
+time, with the files open and highlighted and, when there is a page, the app beside them. Next, the
+map, the voice and the memory work as in a review: a tour is kept, and goes on later.
 
 ## 🌐 The app, beside the code
 
@@ -94,9 +111,10 @@ The start screen checks all of it and types the command that fixes what is missi
 
 ## Use
 
-**Talkthrough** in the secondary side bar (or **Talkthrough: Start PR Review**), then pick a pull
-request. Claude's session is a normal Claude Code session, named `Talkthrough · PR #<n>: <title>`:
-**Show Claude's terminal** opens it, `claude --resume` finds it later.
+**Talkthrough** in the secondary side bar, then pick a pull request, your changes, or ask for a tour
+(or **Talkthrough: Start PR Review**, **Review My Changes**, **Explain How Something Works**). Claude's
+session is a normal Claude Code session, named `Talkthrough · PR #<n>: <title>` (or after your changes,
+or the tour): **Show Claude's terminal** opens it, `claude --resume` finds it later.
 
 | Key             | Action                                                                      |
 | --------------- | --------------------------------------------------------------------------- |
@@ -126,7 +144,8 @@ browser panel when it is on). No shell, no edits. Nothing is posted to GitHub bu
 ```
 Chat (webview, Svelte) ⇄ extension host ⇄ claude (your CLI, interactive, in a pseudo-terminal)
  text + voice player       ├ say, sentence by sentence      hooks → POST /hook/* (curl)
- Talk · Next · Send        ├ MCP server /mcp  ◄─────────── tools: pr_overview, pr_diff, set_map…
+ Talk · Next · Send        ├ MCP server /mcp  ◄─────────── tools: pr_overview, pr_diff, set_map,
+                           │                                      set_tour, browser_…
                            └ VS Code: diffs, highlights, references
 ```
 

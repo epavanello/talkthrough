@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { HostApi } from '@talkthrough/shared';
+import { reviewName, type ChangeScope, type HostApi } from '@talkthrough/shared';
 import { RevisionProvider, SCHEME } from './diff';
 import { githubRepo, searchPulls } from './github';
 import { ReviewSession, findRepo, type StartOptions } from './session';
@@ -43,6 +43,50 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     await review.start({ kind: 'github', pr: value });
   };
 
+  const reviewChanges = async (scope?: ChangeScope) => {
+    const picked =
+      scope ??
+      (
+        await vscode.window.showQuickPick(
+          [
+            {
+              label: 'Staged changes',
+              description: 'what git commit would take',
+              scope: 'staged' as const
+            },
+            {
+              label: 'Uncommitted changes',
+              description: 'staged or not, new files included',
+              scope: 'uncommitted' as const
+            },
+            {
+              label: 'This branch',
+              description: 'everything since main, committed or not',
+              scope: 'branch' as const
+            }
+          ],
+          { title: 'Talkthrough: review your changes' }
+        )
+      )?.scope;
+    if (!picked) return;
+    await vscode.commands.executeCommand('talkthrough.chat.focus');
+    await review.start({ kind: 'changes', scope: picked });
+  };
+
+  const startTour = async (question: string) => {
+    const value =
+      question.trim() ||
+      (await vscode.window.showInputBox({
+        title: 'Talkthrough: explain how something works',
+        prompt: 'What should Claude walk you through?',
+        placeHolder: 'How does the sign-up form work?',
+        ignoreFocusOut: true
+      }));
+    if (!value?.trim()) return;
+    await vscode.commands.executeCommand('talkthrough.chat.focus');
+    await review.start({ kind: 'tour', question: value });
+  };
+
   const api: HostApi = {
     getState: async () => {
       await review.ready;
@@ -50,6 +94,8 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       return review.state;
     },
     start,
+    reviewChanges,
+    startTour,
     listPulls: async (filter, text) => {
       const repo = await findRepo().catch(() => null);
       if (!repo)
@@ -74,11 +120,12 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       const kept = review.state.reviews.find((one) => one.id === id);
       if (!kept) return;
       if (kept.ok < kept.total) {
+        const name = reviewName(kept);
         const choice = await vscode.window.showWarningMessage(
-          `Drop the review of PR #${kept.number}?`,
+          `Drop ${name}?`,
           {
             modal: true,
-            detail: `${kept.ok} of ${kept.total} hunks are ok. Its chat and hunk states are deleted; Claude's session stays in Claude Code.`
+            detail: `${kept.ok} of ${kept.total} ${kept.kind === 'tour' ? 'stops' : 'hunks'} are ok. Its chat and states are deleted; Claude's session stays in Claude Code.`
           },
           'Drop'
         );
@@ -132,7 +179,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
         ? `Every hunk goes back to todo, and the ${viewed} files marked as Viewed on GitHub are unmarked.`
         : 'Every hunk goes back to todo.';
       const choice = await vscode.window.showWarningMessage(
-        `Start the review of PR #${pr.number} over?`,
+        `Start ${reviewName(pr)} over?`,
         { modal: true, detail },
         'Start over'
       );
@@ -156,6 +203,10 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     }),
     vscode.commands.registerCommand('talkthrough.start', (pr?: string) =>
       start(typeof pr === 'string' ? pr : '')
+    ),
+    vscode.commands.registerCommand('talkthrough.reviewChanges', () => reviewChanges()),
+    vscode.commands.registerCommand('talkthrough.explain', (question?: string) =>
+      startTour(typeof question === 'string' ? question : '')
     ),
     vscode.commands.registerCommand('talkthrough.toggleMic', () => review.toggleMic()),
     vscode.commands.registerCommand('talkthrough.next', () => review.next()),

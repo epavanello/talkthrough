@@ -115,6 +115,7 @@ export async function loadPr(repo: string, ref: PrRef): Promise<LoadedPr> {
   const mergeBase = await git(repo, 'merge-base', pr.baseRefOid, pr.headRefOid);
   return {
     info: {
+      kind: 'pr',
       number: pr.number,
       title: pr.title,
       url: pr.url,
@@ -186,6 +187,7 @@ export async function loadLocal(
   const baseSha = await git(repo, 'rev-parse', options.base);
   return {
     info: {
+      kind: 'pr',
       number: options.number,
       title: options.title,
       url: null,

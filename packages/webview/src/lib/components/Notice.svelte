@@ -14,6 +14,7 @@
   } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
   import { app } from '$lib/app.svelte';
+  import { kindOf } from '@talkthrough/shared';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
   import { cn } from '$lib/utils';
@@ -24,7 +25,7 @@
   /** Checkout offers dismissed in this window, by PR head. */
   let dismissed = $state<string[]>([]);
   const isCheckoutOffered = $derived(
-    Boolean(pr && !pr.isLive && !dismissed.includes(pr.headSha)) &&
+    Boolean(pr && kindOf(pr) === 'pr' && !pr.isLive && !dismissed.includes(pr.headSha)) &&
       status !== 'error' &&
       status !== 'idle'
   );
@@ -116,9 +117,11 @@
 {#if newHead && pr && status !== 'error'}
   {#snippet body()}
     <p>
-      {newHead.commits === null
-        ? 'The PR was rewritten since your review (a force-push).'
-        : `${newHead.commits} new commit${newHead.commits === 1 ? '' : 's'} since your review.`}
+      {app.kind === 'changes'
+        ? 'Your changes moved since this review.'
+        : newHead.commits === null
+          ? 'The PR was rewritten since your review (a force-push).'
+          : `${newHead.commits} new commit${newHead.commits === 1 ? '' : 's'} since your review.`}
       Update keeps what didn't change; the rest gathers in a block at the top of the map.
     </p>
   {/snippet}

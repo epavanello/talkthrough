@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { MessagesSquare, Trash2 } from '@lucide/svelte';
+  import { Compass, FileDiff, MessagesSquare, Trash2 } from '@lucide/svelte';
+  import { reviewName } from '@talkthrough/shared';
   import { ago, app } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
@@ -7,6 +8,7 @@
   import PullPicker from './PullPicker.svelte';
   import Requirements from './Requirements.svelte';
   import Shortcuts from './Shortcuts.svelte';
+  import Starters from './Starters.svelte';
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -16,8 +18,8 @@
     <Shortcuts />
   </header>
   <p class="px-3 pt-3 text-muted-foreground">
-    Review a pull request by talking it through with Claude: it opens the diffs, explains them a
-    step at a time, and remembers what is clear.
+    Talk a pull request, your own changes or a part of the code through with Claude: it opens the
+    code, explains it a step at a time, and remembers what is clear.
   </p>
 
   <Requirements />
@@ -37,7 +39,13 @@
               onclick={() => host.openReview(review.id)}
             >
               <span class="flex items-baseline gap-1.5">
-                <span class="shrink-0 text-muted-foreground tabular-nums">#{review.number}</span>
+                {#if review.kind === 'tour'}
+                  <Compass class="size-3.5 shrink-0 self-center text-muted-foreground" />
+                {:else if review.kind === 'changes'}
+                  <FileDiff class="size-3.5 shrink-0 self-center text-muted-foreground" />
+                {:else}
+                  <span class="shrink-0 text-muted-foreground tabular-nums">#{review.number}</span>
+                {/if}
                 <span class="min-w-0 flex-1 truncate">{review.title}</span>
               </span>
               <span class="flex items-center gap-2 text-xs text-muted-foreground">
@@ -55,7 +63,11 @@
                   ></span>
                 </span>
                 <span class={cn('tabular-nums', isDone && 'text-ok')}>
-                  {isDone ? 'all clear' : `${review.ok}/${review.total} ok`}
+                  {isDone
+                    ? 'all clear'
+                    : review.total
+                      ? `${review.ok}/${review.total} ok`
+                      : 'not started'}
                 </span>
                 <span class="truncate">· {ago(review.updatedAt)}</span>
               </span>
@@ -69,8 +81,8 @@
               size="icon-xs"
               icon={Trash2}
               hint={isDone
-                ? `Remove the review of PR #${review.number} from the list`
-                : `Drop the review of PR #${review.number} (asks first)`}
+                ? `Remove ${reviewName(review)} from the list`
+                : `Drop ${reviewName(review)} (asks first)`}
               onclick={() => host.dropReview(review.id)}
             />
           </li>
@@ -78,6 +90,8 @@
       </ul>
     </section>
   {/if}
+
+  <Starters />
 
   <PullPicker />
 </div>

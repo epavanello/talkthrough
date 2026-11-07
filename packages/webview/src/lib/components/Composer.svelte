@@ -21,7 +21,7 @@
           ? 'Claude is asking something: see above'
           : !app.isRunning
             ? 'Resume the review to talk with Claude'
-            : 'Ask about the PR, or press Talk'
+            : `Ask about ${app.kind === 'tour' ? 'it' : app.kind === 'changes' ? 'your changes' : 'the PR'}, or press Talk`
   );
 
   const handleSend = () => {

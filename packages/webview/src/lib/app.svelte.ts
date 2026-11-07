@@ -2,6 +2,7 @@ import {
   EMPTY_STATE,
   SHORTCUTS,
   isPreparing,
+  kindOf,
   type HunkState,
   type PullFilter,
   type ReviewState
@@ -52,6 +53,11 @@ class App {
 
   set pullFilter(filter: PullFilter) {
     this.#remember({ pullFilter: filter });
+  }
+
+  /** A pull request, your own changes, or a tour. */
+  get kind() {
+    return kindOf(this.state.pr);
   }
 
   /** Claude runs, or is starting. */

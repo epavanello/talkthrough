@@ -2,6 +2,12 @@
 
 ## 0.5.0
 
+- **Review your own changes**, before the PR: staged, uncommitted (new files included) or the whole
+  branch against main. Claude reviews them as a careful colleague and flags leftovers; your index and
+  working tree are untouched. When your changes move, Update reviews only what changed.
+- **Tours**: ask how something works ("how does the sign-up form work?") and Claude finds the code,
+  draws a tour of it in the order it runs, and walks you through it a stop at a time, with the files
+  highlighted and the app beside them. Tours are kept and go on later, like reviews.
 - **The app in a browser panel**, beside the code: Claude opens the page a change concerns, clicks
   through the flow, and draws numbered, labelled boxes on what the PR changed (dashed) or what to do
   (pulsing), while it talks. The page is live: you watch, and you can click and type in it too, to sign
@@ -22,6 +28,7 @@
   shortcuts: their tooltips and the shortcuts list do.
 - Cancel stops a dictation and sends nothing. While dictation starts, the last message sent no
   longer shows as if it were being heard.
+- Talk while a dictation is being transcribed no longer starts another one.
 - A short dictation ("Done.") is sent: Claude Code sends one by itself only from three words on, and
   the chat stayed on "Transcribing…".
 

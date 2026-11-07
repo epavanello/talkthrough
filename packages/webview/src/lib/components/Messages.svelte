@@ -22,7 +22,7 @@
       ? `Open ${cue.path} in the browser panel`
       : cue.kind === 'mark'
         ? `Mark ${cue.path} in the browser panel`
-        : `${cue.kind === 'show' ? 'Show the diff of' : cue.kind === 'open' ? 'Open' : 'References in'} ${cue.path}${
+        : `${cue.kind === 'show' ? (app.kind === 'tour' ? 'Show' : 'Show the diff of') : cue.kind === 'open' ? 'Open' : 'References in'} ${cue.path}${
             cue.start
               ? ` L${cue.start}${cue.end && cue.end !== cue.start ? `-${cue.end}` : ''}`
               : ''
@@ -34,6 +34,21 @@
     app.state.player.messageId === message.id && app.state.player.sentence === index;
   const isCode = (sentence: Sentence) =>
     sentence.parts.length === 1 && sentence.parts[0].type === 'code';
+  const PREPARING = {
+    pr: {
+      title: 'Claude is studying the pull request',
+      body: 'It reads the diff and draws a map of the changes, in the order the code runs.'
+    },
+    changes: {
+      title: 'Claude is studying your changes',
+      body: 'It reads the diff and draws a map of them, in the order the code runs.'
+    },
+    tour: {
+      title: 'Claude is exploring the code',
+      body: 'It finds where this lives and draws a tour of it, in the order it runs.'
+    }
+  } as const;
+
   /** Next, pressed or said: an action more than a message. */
   const isNext = (message: ChatMessage) => message.text.trim() === 'Next';
 
@@ -149,11 +164,10 @@
     <section class="my-3 rounded border p-3" aria-labelledby="preparing-title">
       <h2 id="preparing-title" class="flex items-center gap-2 font-semibold">
         <LoaderCircle class="size-4 shrink-0 animate-spin text-explained" />
-        Claude is studying the pull request
+        {PREPARING[app.kind].title}
       </h2>
       <p class="mt-1 text-xs text-muted-foreground">
-        It reads the diff and draws a map of the changes, in the order the code runs. You can talk
-        as soon as it is ready.
+        {PREPARING[app.kind].body} You can talk as soon as it is ready.
       </p>
       <ol class="mt-2 flex flex-col gap-0.5 text-xs" aria-live="polite">
         {#if folded}<li class="text-muted-foreground">… {folded} earlier steps</li>{/if}

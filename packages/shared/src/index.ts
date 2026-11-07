@@ -3,7 +3,10 @@
  * and the RPC the webview calls.
  */
 
-/** A hunk of the PR diff. Lines are the PR head's (the base's for a deleted file). */
+/**
+ * A hunk of the PR diff. Lines are the PR head's (the base's for a deleted file). In a tour, a stop:
+ * lines Claude picked, `header` their title, no additions or deletions.
+ */
 export interface Hunk {
   /** `H1`, `H2`…, in diff order. */
   id: string;
@@ -37,7 +40,19 @@ export interface PrFile {
   hunks: string[];
 }
 
+/**
+ * What a review is about: a pull request, the person's own changes (not a PR yet), or a tour of how
+ * something works (no diff: Claude picks the stops).
+ */
+export type ReviewKind = 'pr' | 'changes' | 'tour';
+
+/** Your own changes: staged ones, everything uncommitted, or the whole branch against its base. */
+export type ChangeScope = 'staged' | 'uncommitted' | 'branch';
+
 export interface PrInfo {
+  /** Missing in reviews kept by 0.4: a pull request. */
+  kind?: ReviewKind;
+  /** 0 when it is not a pull request. */
   number: number;
   title: string;
   url: string | null;
@@ -133,6 +148,7 @@ export type SessionStatus =
 /** A review kept across windows, as the start screen lists it. */
 export interface ReviewSummary {
   id: string;
+  kind?: ReviewKind;
   number: number;
   title: string;
   /** Hunks marked ok, of all of them. */
@@ -283,6 +299,17 @@ export const EMPTY_STATE: ReviewState = {
   requirements: null
 };
 
+export const kindOf = (pr: { kind?: ReviewKind } | null) => pr?.kind ?? 'pr';
+
+/** A review as a sentence names it: `the review of PR #943`, `the tour “How sign-up works”`. */
+export function reviewName(review: { kind?: ReviewKind; number: number; title: string }) {
+  const kind = kindOf(review);
+  if (kind === 'tour') return `the tour “${review.title}”`;
+  if (kind === 'changes')
+    return `the review of ${review.title[0].toLowerCase()}${review.title.slice(1)}`;
+  return `the review of PR #${review.number}`;
+}
+
 /** A PR that has no map yet while Claude is busy: it is still preparing, and input waits. */
 export const isPreparing = (state: ReviewState) =>
   !state.blocks.length && (state.status === 'starting' || state.status === 'thinking');
@@ -294,6 +321,10 @@ export interface HostApi {
   start(pr: string): Promise<void>;
   /** The open pull requests of a list, narrowed by search text. */
   listPulls(filter: PullFilter, text: string): Promise<PullList>;
+  /** A review of your own changes; one kept for the same scope goes on with them. */
+  reviewChanges(scope: ChangeScope): Promise<void>;
+  /** A guided tour of how something works, from a question ("how does sign-up work?"). */
+  startTour(question: string): Promise<void>;
   /** Opens a kept review and goes on with its Claude session. */
   openReview(id: string): Promise<void>;
   /** Forgets a kept review (asks first unless every hunk is ok). */

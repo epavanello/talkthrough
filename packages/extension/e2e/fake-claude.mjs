@@ -151,7 +151,25 @@ async function turn(prompt) {
     if (isCancelled) return;
   }
   let reply;
-  if (!isPrepared || prompt.includes('set_map')) {
+  if (prompt.startsWith('Prepare a tour')) {
+    // A tour: find the code, draw its stops
+    isPrepared = true;
+    await tool('code_search', { pattern: 'resolvePrice' });
+    await tool('set_tour', {
+      blocks: [
+        {
+          title: 'Il calcolo',
+          why: 'Dove nasce il prezzo',
+          stops: [{ path: 'src/price.ts', start: 1, end: 3, title: 'resolvePrice' }]
+        },
+        {
+          title: 'Chi lo usa',
+          stops: [{ path: 'src/orders.ts', start: 3, end: 3, title: 'Il salvataggio' }]
+        }
+      ]
+    });
+    reply = 'Il prezzo si calcola in un punto solo. Il tour ha due blocchi.';
+  } else if (!isPrepared || prompt.includes('set_map')) {
     isPrepared = true;
     await prepare();
     reply = 'La PR arrotonda i prezzi per eccesso. La mappa ha due blocchi.';

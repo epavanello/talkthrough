@@ -2,7 +2,7 @@
  * Stands in for the extension host so the chat runs in a plain browser
  * (`pnpm --filter @talkthrough/webview dev:browser`): RPC calls are logged, and `?scene=` picks
  * what to show — `home`, `setup` (requirements missing), `preparing`, `review` (default), `update`,
- * `browser` (the browser panel), `trust`, `recording` (dictation),
+ * `browser` (the browser panel), `trust`, `recording` (dictation), `tour`,
  * `error` — with `&theme=light` for a light theme, `&width=280` for a narrow side bar and
  * `&voice=off` for the voice turned off.
  */
@@ -214,8 +214,26 @@ const review: ReviewState = {
   requirements: []
 };
 
-const reviews = [
+const reviews: ReviewState['reviews'] = [
   { id: 'r1', number: 943, title: pr.title, ok: 1, total: 4, updatedAt: now - 10 * MINUTE },
+  {
+    id: 'r4',
+    kind: 'tour',
+    number: 0,
+    title: 'How does the sign-up form work?',
+    ok: 1,
+    total: 4,
+    updatedAt: now - 2 * 60 * MINUTE
+  },
+  {
+    id: 'r5',
+    kind: 'changes',
+    number: 0,
+    title: 'Staged changes on feat/checkout-estimate',
+    ok: 0,
+    total: 6,
+    updatedAt: now - 5 * 60 * MINUTE
+  },
   {
     id: 'r2',
     number: 922,
@@ -276,6 +294,56 @@ const SCENES: Record<string, Partial<ReviewState>> = {
     dialog: 'trust',
     activity: 'Claude asks whether you trust this folder.',
     pr: { ...pr, isLive: true }
+  },
+  tour: {
+    ...review,
+    pr: {
+      ...pr,
+      kind: 'tour',
+      number: 0,
+      title: 'How does the sign-up form work?',
+      url: null,
+      isLive: true
+    },
+    files: [
+      { path: 'src/routes/signup/+page.svelte', hunks: ['T1'] },
+      { path: 'src/routes/signup/+page.server.ts', hunks: ['T2', 'T3'] },
+      { path: 'src/lib/server/mail.ts', hunks: ['T4'] }
+    ].map((file) => ({
+      ...file,
+      previousPath: null,
+      changeType: 'MODIFIED' as const,
+      additions: 0,
+      deletions: 0
+    })),
+    hunks: Object.fromEntries(
+      (
+        [
+          ['T1', 'src/routes/signup/+page.svelte', 12, 48, 'The form'],
+          ['T2', 'src/routes/signup/+page.server.ts', 8, 30, 'Validates the fields'],
+          ['T3', 'src/routes/signup/+page.server.ts', 32, 55, 'Creates the user'],
+          ['T4', 'src/lib/server/mail.ts', 5, 22, 'Sends the confirmation']
+        ] as const
+      ).map(([id, path, start, end, header]) => [
+        id,
+        { id, path, start, end, header, additions: 0, deletions: 0, key: id }
+      ])
+    ),
+    coverage: { T1: 'ok', T2: 'explained', T3: 'todo', T4: 'todo' },
+    step: ['T2'],
+    blocks: [
+      { id: 'B1', title: 'The page', why: 'Where it starts', hunks: ['T1'] },
+      { id: 'B2', title: 'The action', why: 'What the server does', hunks: ['T2', 'T3'] },
+      { id: 'B3', title: 'The email', why: 'After sign-up', hunks: ['T4'] }
+    ],
+    hotspots: [
+      {
+        id: 'S1',
+        title: 'No rate limit on sign-up',
+        detail: 'The action creates users without a limit per address.',
+        anchors: ['src/routes/signup/+page.server.ts#L32-55']
+      }
+    ]
   },
   recording: {
     ...review,

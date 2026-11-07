@@ -15,8 +15,8 @@ and webview, esbuild for the host, e2e in a real VS Code.
   `packages/shared` (`ReviewState`, `HostApi`, `SHORTCUTS`, `MODELS`, `isPreparing`). The shortcuts are
   also bound in `package.json`: `test/manifest.test.ts` keeps the two the same.
 - Svelte 5 runes only. No stores.
-- vscode-free modules stay vscode-free (`browser.ts`, `claude.ts`, `cues.ts`, `delta.ts`, `github.ts`, `patch.ts`, `player.ts`,
-  `pr.ts`, `proc.ts`, `prompts.ts`, `requirements.ts`, `reviews.ts`, `server.ts`, `tools.ts`): they are
+- vscode-free modules stay vscode-free (`browser.ts`, `changes.ts`, `claude.ts`, `cues.ts`, `delta.ts`,
+  `github.ts`, `patch.ts`, `player.ts`, `pr.ts`, `proc.ts`, `prompts.ts`, `requirements.ts`, `reviews.ts`, `server.ts`, `tools.ts`): they are
   unit-tested and `cli-check` runs them in plain Node.
 - **Every user-facing change ships as a release**: in the same push, bump `version` in
   `packages/extension/package.json` (fix → patch, feature → minor while on 0.x) and add a `## <version>`
@@ -84,6 +84,20 @@ and webview, esbuild for the host, e2e in a real VS Code.
   a stopped one goes on with `--resume` and the same prompt. A resume that finds a new head does the
   same, and a restart carries the states over before Claude draws a new map.
 
+### Your changes and tours
+
+- `changes.ts` (vscode-free): a review that is not a PR stands on a snapshot, a commit on top of HEAD
+  that no ref points to, written with a copy of the index (`GIT_INDEX_FILE`; `git add -A` for
+  uncommitted work), fixed author and dates so the same changes make the same commit. `changes`
+  reviews: staged or uncommitted against HEAD, or the branch against `origin/HEAD`, main or master; one
+  kept per scope (`#changes#<scope>`), and `checkHead()` compares snapshots. `PrInfo.kind` says which
+  (`kindOf()`: missing is `pr`); worktree and checkout offers are for PRs only.
+- A tour (`#tour#<time>`) has no diff: Claude gets `TOUR_TOOLS` (`code_search`, `code_file`,
+  `set_tour`) and `systemPrompt(…, 'tour')`. `set_tour` stops become hunks `T1…` (`tourMap()` in
+  `tools.ts`: the title is the header, no additions), in files, in blocks, so coverage, Next and the
+  map work as in a review. A show cue opens the file itself (`Stage.show`). Resuming a tour keeps its
+  stops (`reopenTour`); a new Claude session draws it again.
+
 ### The browser panel
 
 - agent-browser ships inside the extension: a pinned devDependency carries every platform's binary,
@@ -136,18 +150,20 @@ packages/
   shared/      The host ⇄ webview contract: ReviewState, HostApi, SHORTCUTS, MODELS. Start here.
   extension/   The extension (the published package), bundled by esbuild → dist/extension.cjs
     src/        session, claude, server, tools, prompts, cues, patch, delta, player, stage, diff,
-                terminal, pr, github, reviews, requirements, checkout, browser, browserPanel,
-                view, extension
+                terminal, pr, changes, github, reviews, requirements, checkout, browser,
+                browserPanel, view, extension
     resources/  ptybridge.py, icon.svg (the view's), icon.png (the stores', from docs/icon.svg)
     test/       vitest; e2e/ runs in VS Code with e2e/fake-claude.mjs; scripts/cli-check.ts
     scripts/    package.mjs (`pnpm package`: this platform's .vsix; `--all`: every platform's, in vsix/),
-                agent-browser.mjs (its binary per target), readme.mjs (the stores' README)
+                agent-browser.mjs (its binary per target), readme.mjs (the stores' README),
+                cli-check, tour-check, browser-check (the real CLIs)
   webview/     Svelte 5 + Vite + Tailwind 4 + shadcn-svelte → extension/dist/webview
     src/lib/app.svelte.ts   the state (one class, runes) and small helpers
-    src/lib/components/     Home (Requirements, PullPicker), Header, Notice, MapPanel, Messages,
-                            PlayerBar, Composer, Shortcuts, Tip; BrowserApp.svelte is the panel
+    src/lib/components/     Home (Requirements, Starters, PullPicker), Header, Notice, MapPanel,
+                            Messages, PlayerBar, Composer, Shortcuts, Tip; BrowserApp.svelte is
+                            the panel
     preview/                the panel in a browser on a mocked host: ?scene=home|setup|preparing|
-                            review|update|browser|trust|recording|error, &theme=light,
+                            review|update|browser|trust|recording|tour|error, &theme=light,
                             &width=280, &voice=off
 docs/          README images and the icon's source
 ```
@@ -165,8 +181,9 @@ docs/          README images and the icon's source
 
 `pnpm check`, `pnpm test`, `pnpm e2e` (uses the VS Code build pinned in `.vscode-test.mjs`), and
 `pnpm cli-check [folder]` when the CLI arguments, hooks or the MCP server change (runs Haiku, costs a
-little; the folder must be one Claude Code already trusts, or hooks never run). `pnpm format:check`
-runs in CI.
+little; the folder must be one Claude Code already trusts, or hooks never run), and
+`pnpm tour-check [repo] [question]` when the tour's prompt or tools change (Haiku explores the real
+code and draws a tour). `pnpm format:check` runs in CI.
 
 ## Releases
 

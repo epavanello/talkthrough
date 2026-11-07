@@ -64,6 +64,16 @@
         "category": "Talkthrough"
       },
       {
+        "command": "talkthrough.reviewChanges",
+        "title": "Review My Changes",
+        "category": "Talkthrough"
+      },
+      {
+        "command": "talkthrough.explain",
+        "title": "Explain How Something Works",
+        "category": "Talkthrough"
+      },
+      {
         "command": "talkthrough.resume",
         "title": "Resume the Review",
         "category": "Talkthrough"
@@ -227,6 +237,7 @@
     "check": "tsc --noEmit -p .",
     "test": "vitest run --dir test",
     "cli-check": "esbuild scripts/cli-check.ts --bundle --platform=node --format=esm --outfile=.cache/cli-check.mjs --log-level=warning && node .cache/cli-check.mjs",
+    "tour-check": "esbuild scripts/tour-check.ts --bundle --platform=node --format=esm --outfile=.cache/tour-check.mjs --log-level=warning && node .cache/tour-check.mjs",
     "browser-check": "esbuild scripts/browser-check.ts --bundle --platform=node --format=esm --outfile=.cache/browser-check.mjs --log-level=warning && node .cache/browser-check.mjs",
     "package": "node scripts/package.mjs",
     "e2e": "esbuild e2e/*.test.ts --bundle --platform=node --main-fields=module,main --format=cjs --external:vscode --outdir=.cache/e2e --out-extension:.js=.cjs --log-level=warning && vscode-test"

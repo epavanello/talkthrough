@@ -636,3 +636,82 @@ describe('Talkthrough review session', function () {
     );
   });
 });
+
+describe('Your own changes and tours', function () {
+  this.timeout(90_000);
+  let api: TalkthroughApi;
+  let repo: string;
+  const options = { claudeCommand: ['node', FAKE_CLAUDE], isSpeechOn: false };
+  const state = () => api.session.state;
+  const until = async (check: () => boolean, what: string, timeout = 20_000) => {
+    const end = Date.now() + timeout;
+    while (!check()) {
+      if (Date.now() > end) throw new Error(`Timed out waiting for ${what} (${state().status})`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  };
+
+  before(async () => {
+    api = await vscode.extensions
+      .getExtension<TalkthroughApi>('epavanello.talkthrough')!
+      .activate();
+    repo = fixtureRepo();
+  });
+
+  after(async () => {
+    await api.session.end();
+    await api.forget();
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('GIVEN staged and unstaged work WHEN the staged changes are reviewed THEN Claude maps only those', async () => {
+    writeIn(repo, 'src/orders.ts', 'export const save = (total: number) => total;\n');
+    gitIn(repo, 'add', 'src/orders.ts');
+    writeIn(repo, 'src/price.ts', 'export const unstaged = true;\n');
+
+    await api.session.start({ kind: 'changes', scope: 'staged', repo }, options);
+
+    await until(() => state().blocks.length > 0 && state().status === 'ready', 'the map');
+    assert.equal(state().pr?.kind, 'changes');
+    assert.equal(state().pr?.title, 'Staged changes on main');
+    assert.deepEqual(
+      state().files.map((file) => file.path),
+      ['src/orders.ts']
+    );
+  });
+
+  it('GIVEN a question WHEN a tour starts THEN Claude draws stops, and a show cue opens the file itself', async () => {
+    // The code as the previous test left it, but clean: the stops fit its files
+    gitIn(repo, 'reset', '-q', '--hard');
+    await api.session.start(
+      { kind: 'tour', question: 'Come si calcola il prezzo?', repo },
+      options
+    );
+
+    await until(() => state().blocks.length === 2 && state().status === 'ready', 'the tour');
+    assert.equal(state().pr?.kind, 'tour');
+    assert.deepEqual(state().hunks.T1 && [state().hunks.T1.path, state().hunks.T1.header], [
+      'src/price.ts',
+      'resolvePrice'
+    ]);
+
+    api.session.next();
+
+    await until(() => state().coverage.T1 === 'explained', 'the first stop explained');
+    const here = `${path.basename(repo)}/src/price.ts`;
+    const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
+    assert.ok(
+      tabs.some(
+        (tab) => tab.input instanceof vscode.TabInputText && tab.input.uri.path.endsWith(here)
+      ),
+      'the file is open'
+    );
+    assert.ok(
+      !tabs.some(
+        (tab) =>
+          tab.input instanceof vscode.TabInputTextDiff && tab.input.modified.path.endsWith(here)
+      ),
+      'a file, not a diff'
+    );
+  });
+});

@@ -1,4 +1,5 @@
 /** The stage's tools as the review session's MCP server lists them. vscode-free. */
+import type { Block, Hunk, PrFile } from '@talkthrough/shared';
 import type { ToolSpec } from './server';
 
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({
@@ -14,6 +15,47 @@ const strings = (description: string) => ({
   description
 });
 const integer = (description: string) => ({ type: 'integer', minimum: 1, description });
+
+const SEARCH = object(
+  {
+    pattern: string('An extended regular expression'),
+    paths: strings('Repository-relative files or folders; the whole repository when omitted'),
+    ignoreCase: { type: 'boolean', description: 'Case-insensitive' }
+  },
+  ['pattern']
+);
+const FILE = object(
+  {
+    path: string('Repository-relative path'),
+    start: integer('First line'),
+    end: integer('Last line')
+  },
+  ['path']
+);
+const HOTSPOTS = {
+  type: 'array',
+  items: object(
+    {
+      title: string('A few words'),
+      detail: string('The problem and the evidence found'),
+      anchors: strings('Where to look: path#L10-20')
+    },
+    ['title', 'detail']
+  )
+};
+const REFERENCES: ToolSpec = {
+  name: 'find_references',
+  description:
+    "References to the symbol on that line, from VS Code's language server (at most 50), with each line's text.",
+  inputSchema: object(
+    {
+      path: string('Repository-relative path'),
+      line: integer('The line'),
+      symbol: string('The symbol on that line; its first identifier when omitted')
+    },
+    ['path', 'line']
+  )
+};
 
 export const TOOLS: ToolSpec[] = [
   {
@@ -32,26 +74,12 @@ export const TOOLS: ToolSpec[] = [
     name: 'pr_search',
     description:
       'Searches the files as they are at the PR head (git grep, wherever the checkout is): lines matching an extended regular expression, as path:line: text, 200 at most.',
-    inputSchema: object(
-      {
-        pattern: string('An extended regular expression'),
-        paths: strings('Repository-relative files or folders; the whole repository when omitted'),
-        ignoreCase: { type: 'boolean', description: 'Case-insensitive' }
-      },
-      ['pattern']
-    )
+    inputSchema: SEARCH
   },
   {
     name: 'pr_file',
     description: 'A file as it is at the PR head, with line numbers.',
-    inputSchema: object(
-      {
-        path: string('Repository-relative path'),
-        start: integer('First line'),
-        end: integer('Last line')
-      },
-      ['path']
-    )
+    inputSchema: FILE
   },
   {
     name: 'set_map',
@@ -70,34 +98,12 @@ export const TOOLS: ToolSpec[] = [
             ['title', 'hunks']
           )
         },
-        hotspots: {
-          type: 'array',
-          items: object(
-            {
-              title: string('A few words'),
-              detail: string('The problem and the evidence found'),
-              anchors: strings('Where to look: path#L10-20')
-            },
-            ['title', 'detail']
-          )
-        }
+        hotspots: HOTSPOTS
       },
       ['blocks']
     )
   },
-  {
-    name: 'find_references',
-    description:
-      "References to the symbol on that line, from VS Code's language server (at most 50), with each line's text.",
-    inputSchema: object(
-      {
-        path: string('Repository-relative path'),
-        line: integer('The line, at the PR head'),
-        symbol: string('The symbol on that line; its first identifier when omitted')
-      },
-      ['path', 'line']
-    )
-  },
+  REFERENCES,
   {
     name: 'mark_ok',
     description: 'Marks hunks as ok: the person said they are clear. Only after they said so.',
@@ -107,6 +113,65 @@ export const TOOLS: ToolSpec[] = [
     name: 'review_state',
     description:
       'Hunk states (todo, explained, ok), this step, and the next hunks in logical order.',
+    inputSchema: object({})
+  }
+];
+
+/** A tour's tools: the code as it was when the tour started, and the map of its stops. */
+export const TOUR_TOOLS: ToolSpec[] = [
+  {
+    name: 'code_search',
+    description:
+      'Searches the code of the tour (the working tree when it started, git grep): lines matching an extended regular expression, as path:line: text, 200 at most.',
+    inputSchema: SEARCH
+  },
+  {
+    name: 'code_file',
+    description: 'A file of the code of the tour, with line numbers.',
+    inputSchema: FILE
+  },
+  {
+    name: 'set_tour',
+    description:
+      'Sets the tour: blocks of stops in the order the feature runs, each stop a range of lines in a file with a few words of title. Stops get ids (T1, T2…) in that order. Answers with the problems to fix, if any.',
+    inputSchema: object(
+      {
+        blocks: {
+          type: 'array',
+          items: object(
+            {
+              title: string('A few words'),
+              why: string('One sentence: what happens at this point of the flow'),
+              stops: {
+                type: 'array',
+                items: object(
+                  {
+                    path: string('Repository-relative path'),
+                    start: integer('First line'),
+                    end: integer('Last line'),
+                    title: string('A few words: what is there')
+                  },
+                  ['path', 'start', 'end', 'title']
+                )
+              }
+            },
+            ['title', 'stops']
+          )
+        },
+        hotspots: HOTSPOTS
+      },
+      ['blocks']
+    )
+  },
+  REFERENCES,
+  {
+    name: 'mark_ok',
+    description: 'Marks stops as ok: the person said they are clear. Only after they said so.',
+    inputSchema: object({ hunks: strings('Stop ids, such as T3') }, ['hunks'])
+  },
+  {
+    name: 'review_state',
+    description: 'Stop states (todo, explained, ok), this step, and the next stops in order.',
     inputSchema: object({})
   }
 ];
@@ -209,4 +274,68 @@ export function mapProblems(map: MapInput, hunkIds: string[]) {
   const missing = hunkIds.filter((id) => !seen.has(id));
   if (missing.length) problems.push(`Not in any block: ${missing.join(', ')}.`);
   return problems;
+}
+
+export interface TourInput {
+  blocks: {
+    title: string;
+    why?: string;
+    stops: { path: string; start: number; end?: number; title?: string }[];
+  }[];
+  hotspots?: MapInput['hotspots'];
+}
+
+/**
+ * A tour as the review keeps it: each stop a hunk (`T1`…, its title as the header) in its file,
+ * blocks of their ids, and what is wrong with it. `lines` is how many lines a file has, null when
+ * there is no such file.
+ */
+export function tourMap(tour: TourInput, lines: (path: string) => number | null) {
+  const problems: string[] = [];
+  const hunks: Record<string, Hunk> = {};
+  const files = new Map<string, PrFile>();
+  const blocks: Block[] = [];
+  for (const [index, block] of tour.blocks.entries()) {
+    const ids: string[] = [];
+    for (const stop of Array.isArray(block.stops) ? block.stops : []) {
+      const path = String(stop.path ?? '').replace(/^\.?\//, '');
+      const total = lines(path);
+      const start = Math.max(1, Math.floor(Number(stop.start) || 1));
+      if (total === null) {
+        problems.push(`${path} does not exist.`);
+        continue;
+      }
+      if (start > total) {
+        problems.push(`${path} has ${total} lines: L${start} is past its end.`);
+        continue;
+      }
+      const end = Math.min(total, Math.max(start, Math.floor(Number(stop.end) || start)));
+      const id = `T${Object.keys(hunks).length + 1}`;
+      hunks[id] = {
+        id,
+        path,
+        start,
+        end,
+        header: String(stop.title ?? '').trim(),
+        additions: 0,
+        deletions: 0,
+        key: `${path}#L${start}-${end}`
+      };
+      ids.push(id);
+      const file = files.get(path) ?? {
+        path,
+        previousPath: null,
+        changeType: 'MODIFIED',
+        additions: 0,
+        deletions: 0,
+        hunks: []
+      };
+      file.hunks.push(id);
+      files.set(path, file);
+    }
+    if (!ids.length) problems.push(`"${block.title}" has no stop.`);
+    blocks.push({ id: `B${index + 1}`, title: block.title, why: block.why ?? '', hunks: ids });
+  }
+  if (!Object.keys(hunks).length && !problems.length) problems.push('A tour needs stops.');
+  return { problems, files: [...files.values()], hunks, blocks };
 }

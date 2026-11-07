@@ -121,17 +121,24 @@
         title="{hunk.path} L{hunk.start}-{hunk.end}{hunk.header ? ` · ${hunk.header}` : ''}"
         onclick={() => host.showHunk(id)}
       >
-        {#if isNamed}
+        {#if app.kind === 'tour'}
+          <span class="font-sans">{hunk.header || basename(hunk.path)}</span>
+          <span class="text-muted-foreground"
+            >{isNamed ? `${basename(hunk.path)}:` : 'L'}{hunk.start}</span
+          >
+        {:else if isNamed}
           {basename(hunk.path)} <span class="text-muted-foreground">L{hunk.start}</span>
         {:else}
           L{hunk.start}–{hunk.end}
           <span class="font-sans text-muted-foreground">{hunk.header}</span>
         {/if}
       </button>
-      <span class="shrink-0 text-muted-foreground">
-        <span class="text-ok">+{hunk.additions}</span>
-        <span class="text-destructive">−{hunk.deletions}</span>
-      </span>
+      {#if app.kind !== 'tour'}
+        <span class="shrink-0 text-muted-foreground">
+          <span class="text-ok">+{hunk.additions}</span>
+          <span class="text-destructive">−{hunk.deletions}</span>
+        </span>
+      {/if}
     </div>
   {/if}
 {/snippet}
@@ -154,7 +161,7 @@
     {@render groupState(file.hunks, 'This file')}
     <button
       class="min-w-0 flex-1 truncate text-left"
-      title="Show the diff of {file.path}"
+      title="{app.kind === 'tour' ? 'Open' : 'Show the diff of'} {file.path}"
       onclick={() => showFile(file)}
     >
       {#if isFlat && dirname(file.path)}<span class="text-muted-foreground"

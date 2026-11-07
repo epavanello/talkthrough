@@ -57,6 +57,8 @@ export class Stage implements vscode.Disposable {
   }
 
   private async show(context: StageContext, cue: Cue) {
+    // A tour has no diff: its stops are lines of the code as it is
+    if (context.pr.kind === 'tour') return this.open(context, cue, vscode.ViewColumn.One);
     const file = context.files.find(
       (one) => one.path === cue.path || one.previousPath === cue.path
     );

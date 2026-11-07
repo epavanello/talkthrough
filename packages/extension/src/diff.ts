@@ -46,7 +46,8 @@ export async function openPrDiff(pr: PrInfo, file: PrFile, column = vscode.ViewC
   const isDeleted = file.changeType === 'DELETED';
   const left = revisionUri(pr.repo, file.previousPath ?? file.path, isAdded ? '' : pr.mergeBase);
   const right = isDeleted ? revisionUri(pr.repo, file.path, '') : await headUri(pr, file.path);
-  const side = right.scheme === 'file' ? 'PR head = working tree' : `PR #${pr.number}`;
+  const head = pr.kind === 'changes' ? 'your changes' : `PR #${pr.number}`;
+  const side = right.scheme === 'file' ? `${head} = working tree` : head;
   const title = `${path.basename(file.path)} (base ↔ ${side})`;
   await vscode.commands.executeCommand('vscode.diff', left, right, title, {
     preview: true,

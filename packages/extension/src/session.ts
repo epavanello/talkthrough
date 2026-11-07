@@ -14,7 +14,9 @@ import {
   CHOICES,
   EMPTY_STATE,
   isPreparing,
+  kindOf,
   type Block,
+  type ChangeScope,
   type ChatMessage,
   type Choice,
   type Cue,
@@ -26,6 +28,7 @@ import {
   type ReviewSummary,
   type SessionStatus
 } from '@talkthrough/shared';
+import { changesHead, loadChanges, loadTour } from './changes';
 import { checkoutHere, reviewWorktree } from './checkout';
 import { ClaudeProcess, claudeArgs } from './claude';
 import { cuesOf, parseReply } from './cues';
@@ -44,7 +47,8 @@ import {
   parsePrRef,
   prDiff,
   searchAt,
-  type LoadedPr
+  type LoadedPr,
+  type PrRef
 } from './pr';
 import { git, run } from './proc';
 import { NEXT, kickoff, systemPrompt, updatePrompt } from './prompts';
@@ -55,7 +59,15 @@ import { BrowserPanel } from './browserPanel';
 import { ReviewServer, type ToolResult } from './server';
 import { Stage } from './stage';
 import { MirrorTerminal } from './terminal';
-import { BROWSER_TOOLS, TOOLS, mapProblems, type MapInput } from './tools';
+import {
+  BROWSER_TOOLS,
+  TOOLS,
+  TOUR_TOOLS,
+  mapProblems,
+  tourMap,
+  type MapInput,
+  type TourInput
+} from './tools';
 
 type LocalInput = {
   kind: 'local';
@@ -65,7 +77,11 @@ type LocalInput = {
   number: number;
   title: string;
 };
-export type StartInput = { kind: 'github'; pr: string; repo?: string } | LocalInput;
+export type StartInput =
+  | { kind: 'github'; pr: string; repo?: string }
+  | LocalInput
+  | { kind: 'changes'; scope: ChangeScope; repo?: string }
+  | { kind: 'tour'; question: string; repo?: string };
 
 export interface StartOptions {
   /** Run this instead of the installed CLI (tests). */
@@ -136,7 +152,11 @@ const TOOL_LABELS: Record<string, (input: Record<string, unknown>) => string> = 
   mcp__talkthrough__pr_diff: () => 'Reading the diff',
   mcp__talkthrough__pr_file: (input) => `Reading ${path.basename(String(input.path ?? ''))}`,
   mcp__talkthrough__pr_search: (input) => `Searching “${String(input.pattern ?? '').slice(0, 40)}”`,
+  mcp__talkthrough__code_file: (input) => `Reading ${path.basename(String(input.path ?? ''))}`,
+  mcp__talkthrough__code_search: (input) =>
+    `Searching “${String(input.pattern ?? '').slice(0, 40)}”`,
   mcp__talkthrough__set_map: () => 'Drawing the map',
+  mcp__talkthrough__set_tour: () => 'Drawing the tour',
   mcp__talkthrough__find_references: (input) =>
     `Looking for the references of ${input.symbol ?? 'a symbol'}`,
   mcp__talkthrough__mark_ok: () => 'Marking hunks as ok',
@@ -182,6 +202,7 @@ function summaryOf(review: SavedReview): ReviewSummary {
   const ids = Object.keys(review.hunks);
   return {
     id: review.id,
+    kind: kindOf(review.loaded.info),
     number: review.loaded.info.number,
     title: review.loaded.info.title,
     ok: ids.filter((id) => review.coverage[id] === 'ok').length,
@@ -194,8 +215,29 @@ function summaryOf(review: SavedReview): ReviewSummary {
 const commonDirOf = async (repo: string) =>
   realpath(await git(repo, 'rev-parse', '--path-format=absolute', '--git-common-dir'));
 
-const load = async (input: StartInput, repo: string) =>
-  input.kind === 'local' ? loadLocal(repo, input) : loadPr(repo, await parsePrRef(repo, input.pr));
+async function load(input: StartInput, repo: string) {
+  if (input.kind === 'local') return loadLocal(repo, input);
+  if (input.kind === 'changes') return loadChanges(repo, input.scope);
+  if (input.kind === 'tour') return loadTour(repo, input.question);
+  return loadPr(repo, await parsePrRef(repo, input.pr));
+}
+
+/** A review's id: one per PR, per scope of your own changes; each tour its own. */
+function idOf(input: StartInput, commonDir: string, ref: PrRef | null) {
+  if (input.kind === 'github' && ref)
+    return `${commonDir}#${`${ref.owner}/${ref.name}`.toLowerCase()}#${ref.number}`;
+  if (input.kind === 'local') return `${commonDir}#local#${input.number}`;
+  if (input.kind === 'changes') return `${commonDir}#changes#${input.scope}`;
+  return `${commonDir}#tour#${Date.now().toString(36)}`;
+}
+
+/** What a start or resume says it is doing first. */
+const LOADING: Record<StartInput['kind'], string> = {
+  github: 'Loading the pull request',
+  local: 'Loading the pull request',
+  changes: 'Reading your changes',
+  tour: 'Starting the tour'
+};
 
 export class ReviewSession implements vscode.Disposable {
   state: ReviewState = structuredClone(EMPTY_STATE);
@@ -451,13 +493,12 @@ export class ReviewSession implements vscode.Disposable {
     this.review = null;
     this.loaded = null;
     this.replaceState({ status: 'starting' });
-    this.track('Loading the pull request');
+    this.track(LOADING[input.kind]);
     try {
       const repo = input.repo ?? (await findRepo());
       const commonDir = await commonDirOf(repo);
       const ref = input.kind === 'github' ? await parsePrRef(repo, input.pr) : null;
-      const number = ref ? ref.number : (input as LocalInput).number;
-      const id = `${commonDir}#${ref ? `${ref.owner}/${ref.name}`.toLowerCase() : 'local'}#${number}`;
+      const id = idOf(input, commonDir, ref);
       const saved = await this.store.get(id);
       if (run !== this.run) return;
       if (saved) {
@@ -465,7 +506,15 @@ export class ReviewSession implements vscode.Disposable {
         return await this.resume();
       }
       const loaded = ref ? await loadPr(repo, ref) : await load(input, repo);
-      const parsed = parsePatch(await prDiff(loaded.info));
+      const parsed = loaded.info.kind === 'tour' ? [] : parsePatch(await prDiff(loaded.info));
+      if (input.kind === 'changes' && !parsed.length)
+        throw new Error(
+          input.scope === 'staged'
+            ? 'No staged changes to review: stage some first.'
+            : input.scope === 'uncommitted'
+              ? 'No uncommitted changes to review.'
+              : `Nothing on ${loaded.info.head} that ${loaded.info.base} doesn't have.`
+        );
       if (run !== this.run) return;
       this.review = { id, commonDir, input: { ...input, repo } };
       this.loaded = loaded;
@@ -480,8 +529,7 @@ export class ReviewSession implements vscode.Disposable {
       void this.ctx.workspaceState.update(OPEN_KEY, id);
       this.touch();
       await this.server.listen();
-      if (run === this.run)
-        await this.launch(run, { prompt: kickoff(loaded.info.number, loaded.info.title) });
+      if (run === this.run) await this.launch(run, { prompt: kickoff(loaded.info, loaded.body) });
     } catch (error) {
       if (run === this.run) this.fail(error);
     }
@@ -511,8 +559,11 @@ export class ReviewSession implements vscode.Disposable {
     this.state.error = null;
     this.state.trail = [];
     this.setStatus('starting', null);
-    this.track('Checking the pull request');
+    this.track(
+      review.input.kind === 'changes' ? 'Reading your changes' : 'Checking the pull request'
+    );
     try {
+      if (review.input.kind === 'tour') return await this.reopenTour(run, isFresh);
       // This window's checkout of the repository (a worktree, say), else where the review last ran
       const repo =
         this.here?.commonDir === review.commonDir ? this.here.repo : this.loaded.info.repo;
@@ -537,7 +588,7 @@ export class ReviewSession implements vscode.Disposable {
         this.sessionId = randomUUID();
         this.pendingNotes = [];
         this.note('A new Claude session: it prepares the review again.');
-        prompt = kickoff(loaded.info.number, loaded.info.title);
+        prompt = kickoff(loaded.info);
       }
       this.touch();
       await this.server.listen();
@@ -546,6 +597,33 @@ export class ReviewSession implements vscode.Disposable {
     } catch (error) {
       if (run === this.run) this.fail(error);
     }
+  }
+
+  /**
+   * A tour goes on where it stopped: its stops stay on the code they were drawn on. A new Claude
+   * session draws the tour again.
+   */
+  private async reopenTour(run: number, isFresh: boolean) {
+    const loaded = this.loaded!;
+    let prompt: string | undefined;
+    if (isFresh) {
+      Object.assign(this.state, {
+        files: [],
+        hunks: {},
+        coverage: {},
+        step: [],
+        blocks: [],
+        hotspots: []
+      });
+      this.sessionId = randomUUID();
+      this.pendingNotes = [];
+      this.note('A new Claude session: it draws the tour again.');
+      prompt = kickoff(loaded.info, loaded.body);
+    }
+    this.touch();
+    await this.server.listen();
+    if (run !== this.run) return;
+    await this.launch(run, { isResume: !isFresh, prompt });
   }
 
   /** Opens a kept review and goes on with its Claude session. */
@@ -608,9 +686,11 @@ export class ReviewSession implements vscode.Disposable {
   private async launch(run: number, mode: { isResume?: boolean; prompt?: string }, attempt = 0) {
     const command = this.command ?? [await resolveClaude()];
     const hasBrowser = Boolean(await this.browserReady());
-    this.tools = hasBrowser ? [...TOOLS, ...BROWSER_TOOLS] : TOOLS;
-    if (run !== this.run) return;
     const pr = this.loaded!.info;
+    const kind = kindOf(pr);
+    const tools = kind === 'tour' ? TOUR_TOOLS : TOOLS;
+    this.tools = hasBrowser ? [...tools, ...BROWSER_TOOLS] : tools;
+    if (run !== this.run) return;
     const claude = new ClaudeProcess(
       this.ctx.asAbsolutePath(path.join('resources', 'ptybridge.py'))
     );
@@ -630,8 +710,11 @@ export class ReviewSession implements vscode.Disposable {
       language: language(),
       model: config().get<string>('model', ''),
       effort: config().get<string>('effort', ''),
-      systemPrompt: systemPrompt(language(), hasBrowser),
-      name: `Talkthrough · PR #${pr.number}: ${pr.title}`.slice(0, 100),
+      systemPrompt: systemPrompt(language(), hasBrowser, kind),
+      name: `Talkthrough · ${kind === 'pr' ? `PR #${pr.number}: ` : kind === 'tour' ? 'Tour: ' : ''}${pr.title}`.slice(
+        0,
+        100
+      ),
       sessionId: this.sessionId,
       resume: mode.isResume,
       prompt: mode.prompt,
@@ -1008,11 +1091,12 @@ export class ReviewSession implements vscode.Disposable {
 
   private context(isPrompt = false) {
     const { coverage, hunks, step, blocks } = this.state;
+    const isTour = kindOf(this.state.pr) === 'tour';
     const ids = Object.keys(hunks);
     const count = (state: HunkState) =>
       ids.filter((id) => (coverage[id] ?? 'todo') === state).length;
     const lines = [
-      `Hunks: ${count('ok')} ok, ${count('explained')} explained, ${count('todo')} todo, of ${ids.length}.`
+      `${isTour ? 'Stops' : 'Hunks'}: ${count('ok')} ok, ${count('explained')} explained, ${count('todo')} todo, of ${ids.length}.`
     ];
     if (isPrompt) lines.push(...this.pendingNotes.splice(0));
     if (step.length)
@@ -1025,9 +1109,14 @@ export class ReviewSession implements vscode.Disposable {
       const focus = this.stage.describeFocus({ pr: this.loaded.info, files: this.state.files });
       if (focus) lines.push(`Editor: ${focus}.`);
       if (!this.loaded.info.isLive)
-        lines.push('The checkout is not at the PR head: read PR files with pr_file.');
+        lines.push('The working tree is not what is under review: read its files with pr_file.');
     }
-    if (!blocks.length) lines.push('No map yet: set_map once the diff is read.');
+    if (!blocks.length)
+      lines.push(
+        isTour
+          ? 'No tour yet: set_tour once you know the flow.'
+          : 'No map yet: set_map once the diff is read.'
+      );
     const page = this.browser?.page;
     if (page) {
       const marks = this.browser!.currentMarks.map(
@@ -1079,6 +1168,7 @@ export class ReviewSession implements vscode.Disposable {
       case 'pr_overview':
         return { text: await this.overview() };
       case 'pr_search':
+      case 'code_search':
         return {
           text: await searchAt(
             this.loaded.info.repo,
@@ -1093,9 +1183,12 @@ export class ReviewSession implements vscode.Disposable {
       case 'pr_diff':
         return { text: this.diff(Array.isArray(args.paths) ? args.paths.map(String) : []) };
       case 'pr_file':
+      case 'code_file':
         return this.file(String(args.path ?? ''), Number(args.start) || 1, Number(args.end) || 0);
       case 'set_map':
         return this.setMap(args as unknown as MapInput);
+      case 'set_tour':
+        return this.setTour(args as unknown as TourInput);
       case 'find_references':
         return {
           text: await this.stage.references(
@@ -1116,7 +1209,9 @@ export class ReviewSession implements vscode.Disposable {
 
   private async overview() {
     const { info, body, authorNotes } = this.loaded!;
-    const commits = await commitsOf(info).catch(() => []);
+    const isOwn = info.kind === 'changes';
+    // Staged or uncommitted changes are one snapshot: no commits worth listing
+    const commits = isOwn && info.base === 'HEAD' ? [] : await commitsOf(info).catch(() => []);
     const files = this.state.files.map((file) => {
       const from = file.previousPath ? ` from ${file.previousPath}` : '';
       const hunks = file.hunks.map((id) => {
@@ -1125,6 +1220,15 @@ export class ReviewSession implements vscode.Disposable {
       });
       return `- ${file.path}${from} (${file.changeType.toLowerCase()}, +${file.additions} −${file.deletions}): ${hunks.join(', ')}`;
     });
+    if (isOwn)
+      return [
+        `${info.title}: the person's own changes, not a pull request yet.`,
+        `Working tree: ${info.isLive ? 'the same as what is under review' : 'has other changes too (read the staged files with pr_file)'}.`,
+        ...(commits.length ? ['', `Commits (${commits.length}):`, ...commits] : []),
+        '',
+        `Files (${files.length}) and their hunks:`,
+        ...files
+      ].join('\n');
     return [
       `PR #${info.number}: ${info.title}`,
       `${info.author ? `Author: ${info.author} · ` : ''}${info.base} ← ${info.head} · checkout at the PR head: ${info.isLive ? 'yes' : 'no'}`,
@@ -1161,7 +1265,7 @@ export class ReviewSession implements vscode.Disposable {
 
   private async file(filePath: string, start: number, end: number): Promise<ToolResult> {
     const text = await fileAt(this.loaded!.info.repo, this.loaded!.info.headSha, filePath);
-    if (!text) return { text: `${filePath} does not exist at the PR head.`, isError: true };
+    if (!text) return { text: `${filePath} does not exist here.`, isError: true };
     const lines = text.split('\n');
     const last = Math.min(end > 0 ? end : lines.length, start + MAX_FILE_LINES - 1, lines.length);
     const numbered = lines
@@ -1191,6 +1295,53 @@ export class ReviewSession implements vscode.Disposable {
     this.touch();
     return {
       text: `Map set: ${this.state.blocks.length} blocks, ${this.state.hotspots.length} hotspots.`
+    };
+  }
+
+  /** A tour's stops, checked against the code: each one a range of lines in a file there. */
+  private async setTour(tour: TourInput): Promise<ToolResult> {
+    if (!Array.isArray(tour.blocks)) return { text: 'blocks is required.', isError: true };
+    const { repo, headSha } = this.loaded!.info;
+    const paths = [
+      ...new Set(
+        tour.blocks.flatMap((block) =>
+          (Array.isArray(block.stops) ? block.stops : []).map((stop) =>
+            String(stop.path ?? '').replace(/^\.?\//, '')
+          )
+        )
+      )
+    ];
+    const lengths = new Map<string, number>();
+    for (const filePath of paths) {
+      const text = await fileAt(repo, headSha, filePath);
+      if (text) lengths.set(filePath, text.split('\n').length);
+    }
+    const map = tourMap(tour, (filePath) => lengths.get(filePath) ?? null);
+    if (map.problems.length)
+      return { text: `The tour was not set:\n${map.problems.join('\n')}`, isError: true };
+    // Drawn again: a stop on the same lines keeps its state
+    const kept = new Map(
+      Object.values(this.state.hunks).map((hunk) => [hunk.key, this.state.coverage[hunk.id]])
+    );
+    const coverage: Record<string, HunkState> = {};
+    for (const hunk of Object.values(map.hunks)) coverage[hunk.id] = kept.get(hunk.key) ?? 'todo';
+    Object.assign(this.state, {
+      files: map.files,
+      hunks: map.hunks,
+      coverage,
+      step: [],
+      blocks: map.blocks,
+      hotspots: (tour.hotspots ?? []).map((hotspot, index) => ({
+        id: `S${index + 1}`,
+        title: hotspot.title,
+        detail: hotspot.detail,
+        anchors: hotspot.anchors ?? []
+      }))
+    });
+    this.touch();
+    const count = Object.keys(map.hunks).length;
+    return {
+      text: `Tour set: ${map.blocks.length} blocks, ${count} stops (T1 to T${count}), ${this.state.hotspots.length} hotspots.`
     };
   }
 
@@ -1258,7 +1409,8 @@ export class ReviewSession implements vscode.Disposable {
 
   toggleMic() {
     const claude = this.claude;
-    if (this.isWaitingForMap()) return;
+    // Talk again while Claude Code turns the last dictation into text would start another one
+    if (this.isWaitingForMap() || this.isAwaitingDictation) return;
     if (!claude) return this.note('No Claude session is running: resume the review first.');
     this.player.stop();
     claude.toggleDictation(!this.state.isRecording);
@@ -1550,13 +1702,19 @@ export class ReviewSession implements vscode.Disposable {
     this.isCheckingHead = true;
     this.lastHeadCheck = Date.now();
     try {
-      const sha = await currentHead(loaded, review.input.kind === 'local' ? review.input.head : '');
+      const { input } = review;
+      // A tour stays on the code it was drawn on
+      if (input.kind === 'tour') return;
+      const sha =
+        input.kind === 'changes'
+          ? await changesHead(loaded.info.repo, input.scope)
+          : await currentHead(loaded, input.kind === 'local' ? input.head : '');
       if (this.loaded !== loaded || sha === this.state.newHead?.sha) return;
       if (sha === loaded.info.headSha) {
         if (this.state.newHead) ((this.state.newHead = null), this.changed());
         return;
       }
-      const commits = await commitsSince(loaded, sha);
+      const commits = input.kind === 'changes' ? null : await commitsSince(loaded, sha);
       if (this.loaded !== loaded) return;
       this.state.newHead = { sha, commits };
       this.changed();
@@ -1582,8 +1740,10 @@ export class ReviewSession implements vscode.Disposable {
     this.viewed.clear();
     Object.assign(this.state, { pr: loaded.info, files, hunks, step, blocks, newHead: null });
     this.state.coverage = this.withViewed(coverage);
-    const what =
-      commits === null
+    const isOwn = kindOf(loaded.info) === 'changes';
+    const what = isOwn
+      ? 'Your changes moved'
+      : commits === null
         ? 'The PR was rewritten'
         : `${commits} new commit${commits === 1 ? '' : 's'}`;
     this.note(
@@ -1596,7 +1756,8 @@ export class ReviewSession implements vscode.Disposable {
       from,
       to: loaded.info.headSha,
       changed: changed.map((id) => this.describeHunk(id)),
-      hasMap
+      hasMap,
+      isOwn
     });
   }
 
@@ -1650,7 +1811,7 @@ export class ReviewSession implements vscode.Disposable {
 
   /** A worktree at the PR head, opened in a new window that goes on with the review. */
   async openWorktree() {
-    if (!this.review || !this.loaded) return;
+    if (!this.review || !this.loaded || kindOf(this.loaded.info) !== 'pr') return;
     const folder = await reviewWorktree(this.loaded, this.review.commonDir);
     await this.ctx.globalState.update(HANDOFF_KEY, {
       folder,
@@ -1667,7 +1828,7 @@ export class ReviewSession implements vscode.Disposable {
 
   /** Checks the PR out here (after asking): diffs then open on the real files. */
   async checkoutPr() {
-    if (!this.loaded) return;
+    if (!this.loaded || kindOf(this.loaded.info) !== 'pr') return;
     if (!(await checkoutHere(this.loaded, () => this.openWorktree()))) return;
     const pr = this.loaded.info;
     pr.isLive = await isAtCommit(pr.repo, pr.headSha);
