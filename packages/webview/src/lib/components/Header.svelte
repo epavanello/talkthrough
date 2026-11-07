@@ -9,7 +9,7 @@
     Terminal
   } from '@lucide/svelte';
   import type { SessionStatus } from '@talkthrough/shared';
-  import { app } from '$lib/app.svelte';
+  import { app, shortcutOf } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
   import { cn } from '$lib/utils';
@@ -82,9 +82,12 @@
         icon={Globe}
         class={app.state.browser.isShown ? 'bg-accent text-foreground' : ''}
         aria-pressed={app.state.browser.isShown}
-        hint={app.state.browser.isShown
-          ? 'Hide the browser panel'
-          : 'Show the browser panel: the app, where Claude points at what the PR changed'}
+        hint={{
+          body: app.state.browser.isShown
+            ? 'Hide the browser panel'
+            : 'Show the browser panel: the app, where Claude points at what it talks about',
+          note: shortcutOf('talkthrough.browser')
+        }}
         onclick={() => host.toggleBrowser()}
       />
     {/if}

@@ -122,6 +122,7 @@ or the tour): **Show Claude's terminal** opens it, `claude --resume` finds it la
 | `Ctrl+Alt+→`    | Next: this step is clear                                                    |
 | `Ctrl+Alt+P`    | Pause or resume the voice                                                   |
 | `Ctrl+Alt+R`    | Replay Claude's last reply                                                  |
+| `Ctrl+Alt+B`    | Show or hide the browser panel                                              |
 
 | Setting                       | What                                                                         |
 | ----------------------------- | ---------------------------------------------------------------------------- |

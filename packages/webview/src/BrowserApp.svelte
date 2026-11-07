@@ -26,6 +26,7 @@
   let isLive = $state(false);
   let hasFrame = $state(false);
   let address = $state('');
+  let addressInput = $state<HTMLInputElement | null>(null);
   let isEditing = $state(false);
   let activity = $state<string | null>(null);
   /** Why the last address typed didn't open. */
@@ -75,7 +76,11 @@
         activityTimer = setTimeout(() => (activity = null), 3500);
       }
     });
-    void browser.connect().then(show);
+    // No page yet: the address bar takes the first one
+    void browser.connect().then((view) => {
+      show(view);
+      if (!view.page) addressInput?.focus();
+    });
     // The page's viewport follows the panel's size, a moment after it settles
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(([entry]) => {
@@ -262,9 +267,10 @@
           />
         {/if}
         <input
+          bind:this={addressInput}
           bind:value={address}
           class="h-6 w-full rounded border border-input bg-input-background pr-2 pl-7 text-xs outline-none focus:border-ring"
-          placeholder="http://localhost:5173"
+          placeholder="The app's address"
           spellcheck="false"
           onfocus={() => (isEditing = true)}
           onblur={() => {

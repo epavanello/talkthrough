@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowRight, Mic, SendHorizontal, Square, X } from '@lucide/svelte';
-  import { app, shortcutOf } from '$lib/app.svelte';
+  import { app, keyLabel, shortcutOf } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
 
@@ -76,14 +76,26 @@
       </Button>
     </div>
   {:else}
-    <textarea
-      bind:value={text}
-      rows="2"
-      aria-label="Message to Claude"
-      {placeholder}
-      class="w-full resize-none rounded border border-input bg-input-background px-2 py-1.5 text-sm outline-none focus:border-ring disabled:opacity-60"
-      disabled={!app.canTalk}
-      onkeydown={handleKeydown}></textarea>
+    <!-- Send lives in the box, as in a chat: the row below is for Talk and Next -->
+    <div class="relative">
+      <textarea
+        bind:value={text}
+        rows="2"
+        aria-label="Message to Claude"
+        {placeholder}
+        class="block w-full resize-none rounded border border-input bg-input-background py-1.5 pr-9 pl-2 text-sm outline-none focus:border-ring disabled:opacity-60"
+        disabled={!app.canTalk}
+        onkeydown={handleKeydown}></textarea>
+      <Button
+        class="absolute right-1 bottom-1"
+        variant={text.trim() ? 'default' : 'ghost'}
+        size="icon-xs"
+        icon={SendHorizontal}
+        hint={{ body: 'Send what you typed', note: keyLabel('enter') }}
+        disabled={!app.canTalk || !text.trim()}
+        onclick={handleSend}
+      />
+    </div>
     <div class="flex flex-wrap items-center gap-1.5">
       <Button
         variant="secondary"
@@ -99,9 +111,6 @@
       >
         Talk
       </Button>
-      {#if text.trim()}
-        <Button variant="ghost" size="sm" icon={SendHorizontal} onclick={handleSend}>Send</Button>
-      {/if}
       {#if app.state.status === 'thinking' && !app.isPreparing}
         <Button
           variant="ghost"
@@ -115,6 +124,7 @@
       {/if}
       <Button
         class="ml-auto"
+        variant={text.trim() ? 'secondary' : 'default'}
         size="sm"
         icon={ArrowRight}
         iconAtEnd

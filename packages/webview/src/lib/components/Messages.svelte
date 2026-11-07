@@ -55,20 +55,31 @@
   const trail = $derived(app.state.trail.slice(-TRAIL));
   const folded = $derived(Math.max(0, app.state.trail.length - TRAIL));
 
-  // New messages, and the preparation's steps, scroll into view
+  // New messages, and the preparation's steps, scroll into view: only when they come (the state is
+  // replaced on every update, the player's included), and at once (a smooth scroll stops halfway
+  // when the first sentence read scrolls too)
+  let seen = 0;
   $effect(() => {
-    void app.state.messages.length;
-    void app.state.trail.length;
-    queueMicrotask(() => list?.scrollTo({ top: list.scrollHeight, behavior: 'smooth' }));
+    const count = app.state.messages.length + app.state.trail.length;
+    if (count === seen) return;
+    seen = count;
+    queueMicrotask(() => list?.scrollTo({ top: list.scrollHeight }));
   });
 
-  // So does the sentence being read
+  // So does the sentence being read, once each, and only when it is out of sight: scrolling by hand
+  // while it reads is left alone
+  let followed = '';
   $effect(() => {
     const { messageId, sentence, isPlaying } = app.state.player;
-    if (!isPlaying || !messageId) return;
-    list
-      ?.querySelector(`[data-sentence="${messageId}-${sentence}"]`)
-      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const key = `${messageId}-${sentence}`;
+    if (!isPlaying || !messageId || key === followed) return;
+    followed = key;
+    const element = list?.querySelector(`[data-sentence="${key}"]`);
+    if (!element || !list) return;
+    const box = element.getBoundingClientRect();
+    const view = list.getBoundingClientRect();
+    if (box.top >= view.top && box.bottom <= view.bottom) return;
+    element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
 
   const handleKeydown = (event: KeyboardEvent, message: ChatMessage, index: number) => {

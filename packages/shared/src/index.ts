@@ -256,7 +256,8 @@ export const SHORTCUTS: { command: string; key: string; mac?: string; label: str
   },
   { command: 'talkthrough.next', key: 'ctrl+alt+right', label: 'Next: this step is clear' },
   { command: 'talkthrough.pauseResume', key: 'ctrl+alt+p', label: 'Pause or resume the voice' },
-  { command: 'talkthrough.replay', key: 'ctrl+alt+r', label: "Replay Claude's last reply" }
+  { command: 'talkthrough.replay', key: 'ctrl+alt+r', label: "Replay Claude's last reply" },
+  { command: 'talkthrough.browser', key: 'ctrl+alt+b', label: 'Show or hide the browser panel' }
 ];
 
 /**

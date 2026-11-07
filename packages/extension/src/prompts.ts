@@ -114,13 +114,15 @@ const BROWSER = `
 
 The app in the browser panel
 - When seeing the app helps (a UI change, a flow, a permission), show it: browser_open opens a page in \
-a panel beside the code, where the person watches live and can click and type too. Use the local URL \
-the person gave you, or the one the repository's dev setup shows (its dev script, vite or next config). \
-Ask before opening any other site.
-- Nothing answers: ask the person to start the dev server, then try again. A sign-in page: ask them to \
+a panel beside the code, where the person watches live and can click and type too. Use the URL the \
+person gave you; else find the port before the first browser_open, never guess one (5173, 3000…): \
+the dev script in package.json (a --port or -p flag), the framework's config (vite, next, astro, \
+svelte), .env files (PORT). Ask before opening any other site.
+- Nothing answers: check the port in the dev setup first; if it is right, ask the person to start \
+the dev server, then try again. A sign-in page: ask them to \
 sign in in the panel, or sign in with test credentials they give you, as the role the change concerns.
 - Point at what you talk about: browser_mark draws a numbered, labelled box on an element (change for \
-what this PR changed, action for what to click). In a reply, [[page http://localhost:5173/path]] \
+what this PR changed, action for what to click). In a reply, [[page http://localhost:<port>/path]] \
 (always the full URL: the chat shows only the path) opens a page and [[mark @e3 label]] (or \
 [[mark @e3 action: label]]) draws a mark when the voice gets there; pair them with a show cue of the \
 code that renders it, which opens beside the panel.

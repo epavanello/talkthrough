@@ -326,7 +326,7 @@ export class Browser {
         /ERR_CONNECTION_REFUSED|ECONNREFUSED|ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/i.test(message)
       )
         throw new Error(
-          `Nothing answers at ${target}: the app's server is not running. Ask the person to start it.`
+          `Nothing answers at ${target}: check the port in the repository's dev setup (its dev script, framework config, .env), and if it is right, the app's server is not running. Ask the person to start it.`
         );
       throw error;
     }

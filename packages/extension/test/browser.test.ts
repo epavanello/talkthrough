@@ -139,7 +139,7 @@ else answer({ result: true });
 
   it('GIVEN a server that is down WHEN opened THEN Claude is told to ask for it', async () => {
     await expect(browser.open('http://127.0.0.1:9/')).rejects.toThrow(
-      "Nothing answers at http://127.0.0.1:9/: the app's server is not running. Ask the person to start it."
+      "Nothing answers at http://127.0.0.1:9/: check the port in the repository's dev setup (its dev script, framework config, .env), and if it is right, the app's server is not running. Ask the person to start it."
     );
   });
 });

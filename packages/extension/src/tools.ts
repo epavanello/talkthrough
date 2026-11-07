@@ -189,7 +189,14 @@ export const BROWSER_TOOLS: ToolSpec[] = [
     name: 'browser_open',
     description:
       "Opens a page of the app in the browser panel beside the code: the person watches it live, and can click and type in it too. A full URL, or a path on the current page's origin. Answers its title, URL and interactive elements with refs.",
-    inputSchema: object({ url: string('http://localhost:5173/events/42, or /events/42') }, ['url'])
+    inputSchema: object(
+      {
+        url: string(
+          "http://localhost:<port>/events/42, with the port from the person or the dev setup; or /events/42 on the current page's origin"
+        )
+      },
+      ['url']
+    )
   },
   {
     name: 'browser_snapshot',

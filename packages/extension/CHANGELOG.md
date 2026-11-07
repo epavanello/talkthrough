@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2
+
+- Send sits in the message box, as in a chat, and Next steps back while you type: the two were easy to
+  mix up.
+- Ctrl+Alt+B shows or hides the browser panel; opened with no page yet, its address bar takes the
+  first one.
+- Claude finds the app's port in the dev setup (the dev script's --port, the framework's config,
+  .env) instead of assuming one, and checks it before asking you to start the server.
+- Replaying an older reply no longer jumps to the bottom when it ends, and a new reply scrolls all the
+  way into view.
+
 ## 0.5.1
 
 - The Tour button starts the tour: in 0.5.0 only Enter did.
