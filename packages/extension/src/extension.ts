@@ -91,6 +91,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     getState: async () => {
       await review.ready;
       if (!review.state.requirements) void review.checkRequirements();
+      void review.countChanges();
       return review.state;
     },
     start,

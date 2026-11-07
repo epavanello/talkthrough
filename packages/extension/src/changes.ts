@@ -6,7 +6,7 @@
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import type { ChangeScope } from '@talkthrough/shared';
+import type { ChangeScope, LocalChanges } from '@talkthrough/shared';
 import type { LoadedPr } from './pr';
 import { git, run } from './proc';
 
@@ -67,6 +67,28 @@ export async function defaultBranch(repo: string) {
     if (found.code === 0) return candidate;
   }
   throw new Error('No main or master branch to compare with.');
+}
+
+const lines = (text: string) => text.split('\n').filter(Boolean);
+
+/** How many files each scope holds now: staged, uncommitted (untracked too), the branch's. */
+export async function changeCounts(repo: string): Promise<LocalChanges> {
+  const [staged, status, untracked, base] = await Promise.all([
+    git(repo, 'diff', '--cached', '--name-only'),
+    git(repo, 'status', '--porcelain', '--untracked-files=all'),
+    git(repo, 'ls-files', '--others', '--exclude-standard'),
+    defaultBranch(repo).catch(() => null)
+  ]);
+  let branch = 0;
+  if (base) {
+    const from = await git(repo, 'merge-base', base, 'HEAD').catch(() => null);
+    if (from)
+      branch = new Set([
+        ...lines(await git(repo, 'diff', '--name-only', from)),
+        ...lines(untracked)
+      ]).size;
+  }
+  return { staged: lines(staged).length, uncommitted: lines(status).length, branch, base };
 }
 
 const currentBranch = (repo: string) =>

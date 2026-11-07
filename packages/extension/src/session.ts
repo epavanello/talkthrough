@@ -28,7 +28,7 @@ import {
   type ReviewSummary,
   type SessionStatus
 } from '@talkthrough/shared';
-import { changesHead, loadChanges, loadTour } from './changes';
+import { changeCounts, changesHead, loadChanges, loadTour } from './changes';
 import { checkoutHere, reviewWorktree } from './checkout';
 import { ClaudeProcess, claudeArgs } from './claude';
 import { cuesOf, parseReply } from './cues';
@@ -339,7 +339,9 @@ export class ReviewSession implements vscode.Disposable {
     // New commits on the PR: looked for every few minutes, and when the window gets focus
     this.headTimer = setInterval(() => void this.checkHead(), HEAD_INTERVAL);
     this.focus = vscode.window.onDidChangeWindowState((window) => {
-      if (window.focused && Date.now() - this.lastHeadCheck > 30_000) void this.checkHead();
+      if (!window.focused) return;
+      if (Date.now() - this.lastHeadCheck > 30_000) void this.checkHead();
+      void this.countChanges();
     });
     this.ready = this.init();
   }
@@ -361,6 +363,7 @@ export class ReviewSession implements vscode.Disposable {
     if (saved) this.show(saved);
     this.listReviews();
     void this.checkHead();
+    void this.countChanges();
     if (!isHandedHere || !saved) return;
     void vscode.commands.executeCommand('talkthrough.chat.focus');
     const setup = config().get<string>('worktreeSetup', '').trim();
@@ -438,15 +441,23 @@ export class ReviewSession implements vscode.Disposable {
 
   /** A review's state in place of the current one, keeping the window's (voice, model, lists). */
   private replaceState(fields: Partial<ReviewState>) {
-    const { isSpeechOn, choices, reviews, requirements } = this.state;
+    const { isSpeechOn, choices, reviews, changes, requirements } = this.state;
     this.state = {
       ...structuredClone(EMPTY_STATE),
       isSpeechOn,
       choices,
       reviews,
+      changes,
       requirements,
       ...fields
     };
+    this.changed();
+  }
+
+  /** What each scope of this window's own changes holds now, for the start screen. */
+  async countChanges() {
+    const repo = this.here?.repo;
+    this.state.changes = repo ? await changeCounts(repo).catch(() => null) : null;
     this.changed();
   }
 
@@ -646,6 +657,7 @@ export class ReviewSession implements vscode.Disposable {
     void this.ctx.workspaceState.update(OPEN_KEY, undefined);
     this.replaceState({ status: 'idle' });
     this.listReviews();
+    void this.countChanges();
   }
 
   /** Forgets kept reviews; the open one among them closes first. */

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+- Model and effort are on the start screen too: pick them before a review or a tour starts. While
+  Claude works they are locked (a change restarts the session), and say so.
+- Your changes show how many files each scope holds; an empty one is greyed out and says why
+  ("nothing staged"), instead of starting and failing.
+- What can't start yet is greyed out and says why: a tour or your changes without Claude Code, a pull
+  request without the GitHub CLI. Disabled buttons look disabled in every theme.
+- Secondary buttons (Staged, Uncommitted, Talk…) have a border: some themes give them no background.
+
 ## 0.5.0
 
 - **Review your own changes**, before the PR: staged, uncommitted (new files included) or the whole

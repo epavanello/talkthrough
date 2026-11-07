@@ -253,7 +253,12 @@ const reviews: ReviewState['reviews'] = [
 ];
 
 const SCENES: Record<string, Partial<ReviewState>> = {
-  home: { ...EMPTY_STATE, reviews, requirements: [] },
+  home: {
+    ...EMPTY_STATE,
+    reviews,
+    requirements: [],
+    changes: { staged: 0, uncommitted: 3, branch: 5, base: 'main' }
+  },
   setup: {
     ...EMPTY_STATE,
     requirements: [

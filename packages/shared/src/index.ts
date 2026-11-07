@@ -49,6 +49,15 @@ export type ReviewKind = 'pr' | 'changes' | 'tour';
 /** Your own changes: staged ones, everything uncommitted, or the whole branch against its base. */
 export type ChangeScope = 'staged' | 'uncommitted' | 'branch';
 
+/** How many files each scope of your own changes holds now: what the start screen offers. */
+export interface LocalChanges {
+  staged: number;
+  uncommitted: number;
+  branch: number;
+  /** What the branch is compared with; null without main or master. */
+  base: string | null;
+}
+
 export interface PrInfo {
   /** Missing in reviews kept by 0.4: a pull request. */
   kind?: ReviewKind;
@@ -227,6 +236,8 @@ export interface ReviewState {
   browser: { isShown: boolean; page: BrowserPage | null; marks: BrowserMark[] } | null;
   /** The reviews kept for this repository, most recent first (the open one included). */
   reviews: ReviewSummary[];
+  /** This window's repository's own changes; null without a repository. */
+  changes: LocalChanges | null;
   /** Null until checked. */
   requirements: Requirement[] | null;
 }
@@ -296,6 +307,7 @@ export const EMPTY_STATE: ReviewState = {
   newHead: null,
   browser: null,
   reviews: [],
+  changes: null,
   requirements: null
 };
 

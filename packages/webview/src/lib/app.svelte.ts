@@ -4,6 +4,7 @@ import {
   isPreparing,
   kindOf,
   type HunkState,
+  type ReviewKind,
   type PullFilter,
   type ReviewState
 } from '@talkthrough/shared';
@@ -58,6 +59,28 @@ class App {
   /** A pull request, your own changes, or a tour. */
   get kind() {
     return kindOf(this.state.pr);
+  }
+
+  /**
+   * Why a review of this kind can't start now, or null: Claude Code and Python for any, the GitHub
+   * CLI for a pull request.
+   */
+  blockerOf(kind: ReviewKind) {
+    const missing = (this.state.requirements ?? []).filter(
+      (one) =>
+        one.state === 'missing' && !one.isOptional && (kind === 'pr' || one.name !== 'GitHub CLI')
+    );
+    if (!missing.length) return null;
+    const names = missing.map((one) => one.name).join(' and ');
+    return `${names} ${missing.length === 1 ? 'is' : 'are'} missing: fix it above first.`;
+  }
+
+  /** Claude is mid-turn or starting: a model or effort change would restart it now. */
+  get isBusy() {
+    return (
+      this.isPreparing ||
+      ['starting', 'waiting', 'thinking', 'recording'].includes(this.state.status)
+    );
   }
 
   /** Claude runs, or is starting. */

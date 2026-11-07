@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
   import { cn } from '$lib/utils';
+  import Choices from './Choices.svelte';
   import PullPicker from './PullPicker.svelte';
   import Requirements from './Requirements.svelte';
   import Shortcuts from './Shortcuts.svelte';
@@ -22,6 +23,13 @@
     code, explains it a step at a time, and remembers what is clear.
   </p>
 
+  <div
+    class="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-3 pt-2 text-xs text-muted-foreground"
+    aria-label="Claude's session"
+  >
+    <Choices />
+  </div>
+
   <Requirements />
 
   {#if app.state.reviews.length}
@@ -34,8 +42,9 @@
           {@const isDone = review.total > 0 && review.ok === review.total}
           <li class="group flex items-center gap-1 rounded hover:bg-accent">
             <button
-              class="flex min-w-0 flex-1 flex-col gap-1 px-1 py-1.5 text-left"
+              class="flex min-w-0 flex-1 flex-col gap-1 px-1 py-1.5 text-left disabled:pointer-events-none disabled:opacity-50"
               title="Go on with this review: Claude remembers it"
+              disabled={Boolean(app.blockerOf(review.kind ?? 'pr'))}
               onclick={() => host.openReview(review.id)}
             >
               <span class="flex items-baseline gap-1.5">

@@ -8,11 +8,12 @@
     Square,
     Terminal
   } from '@lucide/svelte';
-  import { CHOICES, type Choice, type SessionStatus } from '@talkthrough/shared';
+  import type { SessionStatus } from '@talkthrough/shared';
   import { app } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
   import { cn } from '$lib/utils';
+  import Choices from './Choices.svelte';
   import Shortcuts from './Shortcuts.svelte';
 
   const STATUS: Record<SessionStatus, { label: string; tone: string; isBusy?: boolean }> = {
@@ -41,20 +42,6 @@
       .replace(/-(\d+)-(\d+).*$/, ' $1.$2')
       .replace(/^\w/, (first) => first.toUpperCase()) ?? null
   );
-
-  /** The header's pickers: Claude Code's per-session options. */
-  const PICKERS: { setting: Choice; label: string; hint: string }[] = [
-    {
-      setting: 'model',
-      label: 'Model',
-      hint: "Claude Code's model aliases. A running session goes on with the new one."
-    },
-    {
-      setting: 'effort',
-      label: 'Effort',
-      hint: 'How long Claude thinks before it answers: higher is deeper and slower. A running session goes on with the new one.'
-    }
-  ];
 </script>
 
 <header class="flex flex-col gap-1 border-b px-2 py-1.5">
@@ -154,21 +141,7 @@
     <div
       class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-xs text-muted-foreground"
     >
-      {#each PICKERS as picker (picker.setting)}
-        <label class="flex items-center gap-1" title={picker.hint}>
-          {picker.label}
-          <select
-            class="h-5 rounded border border-input bg-input-background px-1 text-xs text-foreground outline-none focus:border-ring disabled:opacity-50"
-            value={app.state.choices[picker.setting]}
-            disabled={app.isPreparing}
-            onchange={(event) => host.choose(picker.setting, event.currentTarget.value)}
-          >
-            {#each CHOICES[picker.setting] as option (option.value)}
-              <option value={option.value}>{option.label}</option>
-            {/each}
-          </select>
-        </label>
-      {/each}
+      <Choices />
       {#if running}<span class="truncate" title={app.state.model}>running {running}</span>{/if}
     </div>
   {/if}

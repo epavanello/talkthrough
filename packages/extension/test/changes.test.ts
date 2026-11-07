@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { defaultBranch, loadChanges, loadTour, snapshot } from '../src/changes';
+import { changeCounts, defaultBranch, loadChanges, loadTour, snapshot } from '../src/changes';
 import { systemPrompt } from '../src/prompts';
 import { tourMap } from '../src/tools';
 
@@ -76,6 +76,15 @@ describe('your own changes', () => {
     const staged = await loadChanges(repo, 'staged');
     expect(staged.info).toMatchObject({ title: 'Staged changes on feat/round', isLive: false });
     expect(staged.info.mergeBase).toBe(git('rev-parse', 'HEAD'));
+  });
+
+  it('GIVEN work in progress WHEN the start screen counts it THEN each scope says how many files it holds', async () => {
+    expect(await changeCounts(repo)).toEqual({
+      staged: 1,
+      uncommitted: 3,
+      branch: 3,
+      base: 'main'
+    });
   });
 
   it('GIVEN a question WHEN a tour starts THEN it stands on the code as it is, with no diff', async () => {

@@ -65,8 +65,11 @@
 
   const kept = (number: number) => app.state.reviews.find((review) => review.number === number);
 
+  /** Why a pull request can't be reviewed now (a requirement missing), or null. */
+  const blocker = $derived(app.blockerOf('pr'));
+
   const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Enter' || !isPrRef(text)) return;
+    if (event.key !== 'Enter' || !isPrRef(text) || blocker) return;
     event.preventDefault();
     void host.start(text.trim());
   };
@@ -82,6 +85,7 @@
         aria-label="Loading"
       />{/if}
   </div>
+  {#if blocker}<p class="text-xs text-warn">{blocker}</p>{/if}
   <div
     class="flex flex-wrap gap-px rounded border p-px text-xs"
     role="radiogroup"
@@ -119,7 +123,8 @@
 
   {#if isPrRef(text)}
     <button
-      class="flex items-center gap-2 rounded border border-ring px-2 py-1.5 text-left hover:bg-accent"
+      class="flex items-center gap-2 rounded border border-ring px-2 py-1.5 text-left hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+      disabled={Boolean(blocker)}
       onclick={() => host.start(text.trim())}
     >
       <ArrowRight class="size-3.5 shrink-0 text-link" />
@@ -162,7 +167,8 @@
         {@const review = kept(pr.number)}
         <li>
           <button
-            class="flex w-full flex-col gap-0.5 rounded px-1 py-1.5 text-left hover:bg-accent"
+            class="flex w-full flex-col gap-0.5 rounded px-1 py-1.5 text-left hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+            disabled={Boolean(blocker)}
             title={review
               ? 'Go on with this review: Claude remembers it'
               : 'Start a review of this pull request'}
