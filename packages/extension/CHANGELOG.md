@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5.0
+
+- **The app in a browser panel**, beside the code: Claude opens the page a change concerns, clicks
+  through the flow, and draws numbered, labelled boxes on what the PR changed (dashed) or what to do
+  (pulsing), while it talks. The page is live: you watch, and you can click and type in it too, to sign
+  in say. It runs [agent-browser](https://github.com/vercel-labs/agent-browser), which comes with the
+  extension (nothing to install), on your Chrome with a profile of its own per repository, so sign-ins
+  stay; downloads and uploads are denied. Without Chrome, the start screen offers to download one.
+- Replies can carry `[[page /path]]` and `[[mark @ref label]]` cues: the page opens and the box appears
+  when the voice gets there, next to the diff of the code that renders it. A reply about the page
+  that is open names it with its link, so one click shows it again, even after closing the panel or
+  reloading VS Code (a click that can't open it says why).
+  A box's label goes where there is room (above or below, toward the page's middle by an edge), and
+  never makes the page scroll sideways. A box follows its element as the page moves, and goes when
+  the element does (another route, a closed dialog).
+- With the voice off, sentences are plain text (only the code and page links are clickable) and the
+  player's controls are greyed out.
+- Talk is ⌘D (Ctrl+D), as in Claude Code: anywhere in VS Code during a review, except an editor you
+  type in and the terminal, where the key keeps its own meaning. The buttons no longer show their
+  shortcuts: their tooltips and the shortcuts list do.
+- Cancel stops a dictation and sends nothing. While dictation starts, the last message sent no
+  longer shows as if it were being heard.
+- A short dictation ("Done.") is sent: Claude Code sends one by itself only from three words on, and
+  the chat stayed on "Transcribing…".
+
+- Claude can search the code again ("who calls this?", "where is this route used?"): Claude Code no
+  longer has a Grep tool, and the read-only session denied `grep`. It now searches the PR head with a
+  tool of its own, wherever the checkout is.
+- The review session runs no shell commands at all: it reads files and uses the review's tools.
+  The overview Claude reads lists the PR's commits.
+
 ## 0.4.2
 
 - After a resume, a model or effort change, "Your turn" waits until Claude has its review tools: a

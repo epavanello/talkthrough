@@ -7,6 +7,8 @@
   const player = $derived(app.state.player);
   const message = $derived(app.state.messages.find((one) => one.id === player.messageId));
   const hasClaude = $derived(app.state.messages.some((one) => one.role === 'claude'));
+  /** Reading needs the voice: off, the controls stay but are greyed out. */
+  const canRead = $derived(app.state.isSpeechOn);
 </script>
 
 <div class="flex items-center gap-0.5 border-t px-2 py-1">
@@ -15,7 +17,7 @@
     size="icon-xs"
     icon={SkipBack}
     hint="Previous sentence"
-    disabled={!message}
+    disabled={!message || !canRead}
     onclick={() => host.seek(-1)}
   />
   <Button
@@ -26,7 +28,7 @@
       body: player.isPlaying ? 'Pause' : 'Read from the current sentence',
       note: shortcutOf('talkthrough.pauseResume')
     }}
-    disabled={!message}
+    disabled={!message || !canRead}
     onclick={() => host.pauseResume()}
   />
   <Button
@@ -34,7 +36,7 @@
     size="icon-xs"
     icon={SkipForward}
     hint="Next sentence"
-    disabled={!message}
+    disabled={!message || !canRead}
     onclick={() => host.seek(1)}
   />
   <Button
@@ -42,10 +44,10 @@
     size="icon-xs"
     icon={RotateCcw}
     hint={{ body: "Replay Claude's last message", note: shortcutOf('talkthrough.replay') }}
-    disabled={!hasClaude}
+    disabled={!hasClaude || !canRead}
     onclick={() => host.replayLast()}
   />
-  {#if message}
+  {#if message && canRead}
     <span class="ml-1 truncate text-xs tabular-nums text-muted-foreground">
       sentence {player.sentence + 1}/{message.sentences.length}
     </span>

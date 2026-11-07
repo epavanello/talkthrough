@@ -55,6 +55,19 @@ The panel notices new commits on the PR (on focus, and every few minutes). **Upd
 of every hunk whose change is the same, gathers the new or changed ones in a block _What changed since
 your review_ at the top of the map, and Claude, in the same session, explains only those.
 
+## 🌐 The app, beside the code
+
+Claude opens the page a change concerns in a **browser panel** next to the diff,
+clicks through the flow, and draws numbered, labelled boxes: dashed on what the PR changed, pulsing on
+what to do. The page is live: you watch, and you can click and type in it too, to sign in say. If the
+dev server is down, Claude asks you to start it.
+
+It runs [agent-browser](https://github.com/vercel-labs/agent-browser), which comes with the extension,
+on your Chrome, headless, with a profile of its own per repository (sign-ins stay, your everyday
+browser is untouched); without Chrome, the start screen offers to download one for it. Downloads and
+uploads are denied, and page text reaches Claude marked as untrusted. `talkthrough.browser.enabled`
+turns it off.
+
 ## 🔍 The real files, with IntelliSense
 
 When the checkout isn't at the PR head, diffs open on read-only copies. One click fixes it:
@@ -85,12 +98,12 @@ The start screen checks all of it and types the command that fixes what is missi
 request. Claude's session is a normal Claude Code session, named `Talkthrough · PR #<n>: <title>`:
 **Show Claude's terminal** opens it, `claude --resume` finds it later.
 
-| Key              | Action                        |
-| ---------------- | ----------------------------- |
-| `Ctrl+Alt+Space` | Talk, then send what you said |
-| `Ctrl+Alt+→`     | Next: this step is clear      |
-| `Ctrl+Alt+P`     | Pause or resume the voice     |
-| `Ctrl+Alt+R`     | Replay Claude's last reply    |
+| Key             | Action                                                                      |
+| --------------- | --------------------------------------------------------------------------- |
+| `⌘D` (`Ctrl+D`) | Talk, then send what you said: not in an editor you type in, nor a terminal |
+| `Ctrl+Alt+→`    | Next: this step is clear                                                    |
+| `Ctrl+Alt+P`    | Pause or resume the voice                                                   |
+| `Ctrl+Alt+R`    | Replay Claude's last reply                                                  |
 
 | Setting                       | What                                                                         |
 | ----------------------------- | ---------------------------------------------------------------------------- |
@@ -100,12 +113,13 @@ request. Claude's session is a normal Claude Code session, named `Talkthrough ·
 | `talkthrough.speech.*`        | Voice on or off, its voice and rate                                          |
 | `talkthrough.syncViewed`      | Mark finished files as Viewed on GitHub                                      |
 | `talkthrough.worktreeSetup`   | A command run in a new review worktree, such as `pnpm install`               |
+| `talkthrough.browser.enabled` | Claude shows the app in a browser panel beside the code                      |
 | `talkthrough.claudePath`      | The Claude Code CLI to run                                                   |
 | `talkthrough.disabledPlugins` | Claude Code plugins turned off in the session                                |
 
-**Read-only**: the session runs with `--permission-mode dontAsk` and an allowlist (read, search,
-`git log/show/diff`, the stage's tools); edits are denied. Nothing is posted to GitHub but the Viewed
-marks.
+**Read-only**: the session runs with `--permission-mode dontAsk` and an allowlist: reading files and
+the review's own tools (the PR's overview, diff and files, search at the PR head, references, and the
+browser panel when it is on). No shell, no edits. Nothing is posted to GitHub but the Viewed marks.
 
 ## How it works
 
@@ -124,18 +138,20 @@ Details in [AGENTS.md](AGENTS.md).
 
 ```bash
 pnpm install
-pnpm package     # → packages/extension/talkthrough.vsix
+pnpm package     # → packages/extension/talkthrough.vsix, for this platform
 code --install-extension packages/extension/talkthrough.vsix
 ```
 
-| Command                                          | What                                                                       |
-| ------------------------------------------------ | -------------------------------------------------------------------------- |
-| `pnpm build`                                     | webview (Vite) then extension (esbuild)                                    |
-| `pnpm check`                                     | `tsc` and `svelte-check`                                                   |
-| `pnpm test`                                      | unit tests (vitest)                                                        |
-| `pnpm e2e`                                       | VS Code end to end, with `e2e/fake-claude.mjs` in place of the CLI         |
-| `pnpm cli-check [folder]`                        | the real CLI on Haiku: hooks, MCP, the prompt box, resume (costs a little) |
-| `pnpm --filter @talkthrough/webview dev:browser` | the panel in a browser, on a mocked review (`?scene=home`, `&theme=light`) |
+| Command                                                                       | What                                                                                      |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `pnpm build`                                                                  | webview (Vite) then extension (esbuild)                                                   |
+| `pnpm check`                                                                  | `tsc` and `svelte-check`                                                                  |
+| `pnpm test`                                                                   | unit tests (vitest)                                                                       |
+| `pnpm e2e`                                                                    | VS Code end to end, with `e2e/fake-claude.mjs` in place of the CLI                        |
+| `pnpm browser-check [cli]`                                                    | the real agent-browser on a local page: open, marks, screenshot, stream                   |
+| `pnpm build && pnpm --filter talkthrough exec node scripts/package.mjs --all` | every platform's `.vsix` (agent-browser's binary in each) and a universal one, in `vsix/` |
+| `pnpm cli-check [folder]`                                                     | the real CLI on Haiku: hooks, MCP, the prompt box, resume (costs a little)                |
+| `pnpm --filter @talkthrough/webview dev:browser`                              | the panel in a browser, on a mocked review (`?scene=home`, `&theme=light`)                |
 
 F5 (Run Extension) builds and opens an Extension Development Host.
 

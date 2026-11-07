@@ -7,16 +7,26 @@
 
   let list = $state<HTMLDivElement | null>(null);
 
-  const ICONS = { show: '◆', open: '↗', refs: '⇄' } as const;
+  const ICONS = { show: '◆', open: '↗', refs: '⇄', page: '◎', mark: '▣' } as const;
   /** Steps of the preparation shown at once; the older ones fold into a count. */
   const TRAIL = 6;
 
   const cueLabel = (cue: Cue) =>
-    `${ICONS[cue.kind]} ${basename(cue.path)}${cue.start ? `:${cue.start}` : ''}`;
+    cue.kind === 'page'
+      ? `${ICONS.page} ${cue.path.replace(/^https?:\/\/[^/]+/, '') || '/'}`
+      : cue.kind === 'mark'
+        ? `${ICONS.mark} ${(cue.symbol ?? cue.path).replace(/^(change|action|note):\s*/i, '')}`
+        : `${ICONS[cue.kind]} ${basename(cue.path)}${cue.start ? `:${cue.start}` : ''}`;
   const cueTitle = (cue: Cue) =>
-    `${cue.kind === 'show' ? 'Show the diff of' : cue.kind === 'open' ? 'Open' : 'References in'} ${cue.path}${
-      cue.start ? ` L${cue.start}${cue.end && cue.end !== cue.start ? `-${cue.end}` : ''}` : ''
-    }${cue.symbol ? ` (${cue.symbol})` : ''}`;
+    cue.kind === 'page'
+      ? `Open ${cue.path} in the browser panel`
+      : cue.kind === 'mark'
+        ? `Mark ${cue.path} in the browser panel`
+        : `${cue.kind === 'show' ? 'Show the diff of' : cue.kind === 'open' ? 'Open' : 'References in'} ${cue.path}${
+            cue.start
+              ? ` L${cue.start}${cue.end && cue.end !== cue.start ? `-${cue.end}` : ''}`
+              : ''
+          }${cue.symbol ? ` (${cue.symbol})` : ''}`;
   const time = (at: number) =>
     new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -57,6 +67,8 @@
 <!-- prettier-ignore -->
 {#snippet inline(text: string)}{#each text.split(/(`[^`]+`)/g) as piece, at (at)}{#if piece.length > 2 && piece.startsWith('`') && piece.endsWith('`')}<code class="rounded bg-muted px-1 font-mono text-[0.9em]">{piece.slice(1, -1)}</code>{:else}{piece.replace(/\*\*|__/g, '')}{/if}{/each}{/snippet}
 
+<!-- prettier-ignore -->
+{#snippet parts(sentence: Sentence)}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue'}{@render chip(part.cue)}{/if}{/each}{/snippet}
 <!-- prettier-ignore -->
 {#snippet chip(cue: Cue)}<button class="mx-0.5 inline-flex items-center rounded border px-1 align-baseline font-mono text-[11px] text-link hover:bg-accent" title={cueTitle(cue)} onclick={(event) => { event.stopPropagation(); void host.runCue(cue); }}>{cueLabel(cue)}</button>{/snippet}
 
@@ -105,7 +117,7 @@
                 <pre class="my-1 overflow-x-auto rounded bg-muted p-2 font-mono text-xs"><code
                     >{sentence.parts[0].code}</code
                   ></pre>
-              {:else}
+              {:else if app.state.isSpeechOn}
                 <span
                   role="button"
                   tabindex="0"
@@ -120,8 +132,11 @@
                   )}
                   onclick={() => host.play(message.id, index)}
                   onkeydown={(event) => handleKeydown(event, message, index)}
-                  ><!-- prettier-ignore -->{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue'}{@render chip(part.cue)}{/if}{/each}</span
+                  ><!-- prettier-ignore -->{@render parts(sentence)}</span
                 >{' '}
+              {:else}
+                <!-- Voice off: plain text, only the cues are links -->
+                <span class="px-0.5">{@render parts(sentence)}</span>{' '}
               {/if}
             {/each}
           </div>

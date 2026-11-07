@@ -6,3 +6,7 @@ onlyBuiltDependencies:
   - '@vscode/vsce-sign'
   - esbuild
   - keytar
+
+# Its postinstall only sets up a global install: the .vsix carries the binaries (scripts/package.mjs)
+ignoredBuiltDependencies:
+  - agent-browser

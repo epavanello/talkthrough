@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, RotateCw, Square, Terminal } from '@lucide/svelte';
+  import { ChevronLeft, Globe, RotateCw, Square, Terminal } from '@lucide/svelte';
   import { CHOICES, type Choice, type SessionStatus } from '@talkthrough/shared';
   import { app } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
@@ -76,6 +76,19 @@
       >
     {/if}
     <Shortcuts />
+    {#if app.state.browser}
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        icon={Globe}
+        class={app.state.browser.isShown ? 'bg-accent text-foreground' : ''}
+        aria-pressed={app.state.browser.isShown}
+        hint={app.state.browser.isShown
+          ? 'Hide the browser panel'
+          : 'Show the browser panel: the app, where Claude points at what the PR changed'}
+        onclick={() => host.toggleBrowser()}
+      />
+    {/if}
     <Button
       variant="ghost"
       size="icon-xs"

@@ -27,7 +27,9 @@ class App {
     onHostEvent((event) => {
       if (event.event === 'state') this.state = event.state;
     });
-    void host.getState().then((state) => (this.state = state));
+    // The browser panel mounts the same bundle: it has no review state to ask for
+    if (document.body.dataset.view !== 'browser')
+      void host.getState().then((state) => (this.state = state));
   }
 
   #remember(fields: Saved) {
@@ -105,9 +107,15 @@ export function keyLabel(key: string) {
   return parts.map((part) => part[0].toUpperCase() + part.slice(1)).join('+');
 }
 
+/** A shortcut's key on this platform. */
+export const keyOf = (shortcut: (typeof SHORTCUTS)[number]) =>
+  (IS_MAC && shortcut.mac) || shortcut.key;
+
 /** The key of a command's shortcut, as this platform writes it. */
-export const shortcutOf = (command: string) =>
-  keyLabel(SHORTCUTS.find((one) => one.command === command)?.key ?? '');
+export function shortcutOf(command: string) {
+  const shortcut = SHORTCUTS.find((one) => one.command === command);
+  return shortcut ? keyLabel(keyOf(shortcut)) : '';
+}
 
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' });
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [

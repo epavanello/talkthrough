@@ -15,7 +15,7 @@ and webview, esbuild for the host, e2e in a real VS Code.
   `packages/shared` (`ReviewState`, `HostApi`, `SHORTCUTS`, `MODELS`, `isPreparing`). The shortcuts are
   also bound in `package.json`: `test/manifest.test.ts` keeps the two the same.
 - Svelte 5 runes only. No stores.
-- vscode-free modules stay vscode-free (`claude.ts`, `cues.ts`, `delta.ts`, `github.ts`, `patch.ts`, `player.ts`,
+- vscode-free modules stay vscode-free (`browser.ts`, `claude.ts`, `cues.ts`, `delta.ts`, `github.ts`, `patch.ts`, `player.ts`,
   `pr.ts`, `proc.ts`, `prompts.ts`, `requirements.ts`, `reviews.ts`, `server.ts`, `tools.ts`): they are
   unit-tested and `cli-check` runs them in plain Node.
 - **Every user-facing change ships as a release**: in the same push, bump `version` in
@@ -30,6 +30,9 @@ and webview, esbuild for the host, e2e in a real VS Code.
 - `claude.ts` builds the CLI arguments (`--settings` with hooks and tap dictation, `--mcp-config`,
   `--permission-mode dontAsk`, `--name "Talkthrough · PR #<n>: <title>"`, `--session-id <uuid>` for a
   new session, `--resume <uuid>` after) and runs `claude` through `resources/ptybridge.py`.
+- The session is read-only by construction (`ALLOWED_TOOLS` in `claude.ts`): Read and the stage's
+  MCP tools, no shell. The PR is someone else's text, and git flags can write files (`--output`) or run
+  a pager (`git grep -O`). Search is `pr_search` (`git grep` at the PR head, through `run`, no shell).
 - `server.ts` is the local HTTP server: `/hook/<event>` (curl from the hooks) and `/mcp` (stateless
   Streamable HTTP, hand-written JSON-RPC). Bearer token per session.
 - Claude Code connects its MCP servers after the SessionStart hook: a session is ready ("Your turn")
@@ -41,7 +44,11 @@ and webview, esbuild for the host, e2e in a real VS Code.
   `plain()` in `claude.ts` turns them back before matching text.
 - Dictation exists only in Claude Code's interactive interface: Space in tap mode starts it on an
   empty prompt and sends on the second tap. What is heard is read live from the prompt box of an
-  emulated screen (`@xterm/headless`, `promptIn` in `claude.ts`).
+  emulated screen (`@xterm/headless`, `promptIn` in `claude.ts`). Claude Code sends a transcript by itself
+  only from three words on: a shorter one waits in the prompt, and `sendShortDictation()` presses Enter
+  once it holds still and the footer no longer says "Voice: processing".
+- Cancel is Esc while dictating (`cancelDictation`): Claude Code drops the recording. Until it hears
+  new words, it shows the last dictation in its prompt again: `heard()` hides that.
 - Never type `/model` or `/effort` into the session: Claude Code also saves them as defaults. The
   header's pickers (`CHOICES` in shared: `talkthrough.model`, `talkthrough.effort`) relaunch with
   `--resume <session> --model <alias> --effort <level>`, same conversation.
@@ -77,6 +84,34 @@ and webview, esbuild for the host, e2e in a real VS Code.
   a stopped one goes on with `--resume` and the same prompt. A resume that finds a new head does the
   same, and a restart carries the states over before Claude draws a new map.
 
+### The browser panel
+
+- agent-browser ships inside the extension: a pinned devDependency carries every platform's binary,
+  and `scripts/package.mjs` puts one in each platform's `.vsix` (`bin/`, with its licenses; a universal
+  `.vsix` has none). `browserBin()`: `talkthrough.browser.path`, else `bin/`, else the PATH. Without
+  Chrome (`agent-browser doctor`), the start screen offers `agent-browser install`.
+- `browser.ts` (vscode-free) runs agent-browser (Vercel's browser CLI for agents) with `--json`: one
+  session (`review-<hash of the git common dir>`, namespace `talkthrough`) and one Chrome profile per
+  repository in global storage, the installed Chrome when there is one, an action policy denying
+  download and upload, content boundaries on. Marks are our own DOM layer (`markScript`: a box in
+  document coordinates from `get box`, kept within the page's width, its label as text placed by CSS
+  anchor positioning: `position-try-order: most-width`, flipping below). A mark follows the element
+  under it (found by `elementFromPoint`, checked every 300 ms) and goes once it leaves the page;
+  `refresh()` drops those from the list. Numbered `m1…`, kept per page.
+- `browserPanel.ts` is a WebviewPanel in column Two (the diff is in One), mounting the same webview
+  bundle (`data-view="browser"`, `BrowserApp.svelte`). agent-browser's stream (a WebSocket that only
+  takes local clients) is opened by the host, which relays JPEG frames to the panel (ack pacing) and
+  the person's mouse and keys back; the viewport follows the panel's size. Chrome runs with
+  `--force-device-scale-factor=2`: the stream's frames follow Chrome's own pixel ratio, not an emulated
+  one. Keys go through a hidden textarea (a canvas gets no paste or composition) as `keyInput`: text
+  on keyDown, a virtual key code on rawKeyDown (what moves the caret); ⌘ edits go through `edit`.
+- Claude gets `BROWSER_TOOLS` (open, snapshot, act, look, eval, mark) only when the browser is on and
+  agent-browser answers (`browserReady()` at each launch), and the prompt's browser section with them.
+  Cues `[[page …]]` and `[[mark @ref label]]` fire with the voice (`runCue`); a page cue on the page
+  already open keeps it and its marks. A reply's page cues are stored with their full address
+  (`pinPages`): each link works on its own, after a reload too; the chat shows only the path. `pnpm browser-check` runs the real CLI on
+  a local page.
+
 ### Preparing, trust, checkout
 
 - The kickoff (and the "new commits" prompt of a resume) goes on Claude's command line; its message is
@@ -101,16 +136,19 @@ packages/
   shared/      The host ⇄ webview contract: ReviewState, HostApi, SHORTCUTS, MODELS. Start here.
   extension/   The extension (the published package), bundled by esbuild → dist/extension.cjs
     src/        session, claude, server, tools, prompts, cues, patch, delta, player, stage, diff,
-                terminal, pr, github, reviews, requirements, checkout, view, extension
+                terminal, pr, github, reviews, requirements, checkout, browser, browserPanel,
+                view, extension
     resources/  ptybridge.py, icon.svg (the view's), icon.png (the stores', from docs/icon.svg)
     test/       vitest; e2e/ runs in VS Code with e2e/fake-claude.mjs; scripts/cli-check.ts
-    scripts/readme.mjs  the stores' README, from the repository's (run by `pnpm package`)
+    scripts/    package.mjs (`pnpm package`: this platform's .vsix; `--all`: every platform's, in vsix/),
+                agent-browser.mjs (its binary per target), readme.mjs (the stores' README)
   webview/     Svelte 5 + Vite + Tailwind 4 + shadcn-svelte → extension/dist/webview
     src/lib/app.svelte.ts   the state (one class, runes) and small helpers
     src/lib/components/     Home (Requirements, PullPicker), Header, Notice, MapPanel, Messages,
-                            PlayerBar, Composer, Shortcuts, Tip
+                            PlayerBar, Composer, Shortcuts, Tip; BrowserApp.svelte is the panel
     preview/                the panel in a browser on a mocked host: ?scene=home|setup|preparing|
-                            review|update|trust|error, &theme=light, &width=280
+                            review|update|browser|trust|recording|error, &theme=light,
+                            &width=280, &voice=off
 docs/          README images and the icon's source
 ```
 
@@ -134,7 +172,8 @@ runs in CI.
 
 Published as `epavanello.talkthrough` on the VS Code Marketplace and Open VSX by
 `.github/workflows/release.yml`, as Treeline: every push to `main` whose `package.json` version has no
-`v<version>` tag yet runs the tests, packages the `.vsix`, creates the tag and a GitHub release (notes:
-that version's CHANGELOG section, required), then publishes to both stores, with the `VSCE_PAT` and
-`OVSX_PAT` repository secrets (or Entra ID / Open VSX trusted publishing, when set up as in Treeline).
+`v<version>` tag yet runs the tests, packages a `.vsix` per platform and a universal one, creates the
+tag and a GitHub release with them (notes: that version's CHANGELOG section, required), then publishes
+to both stores, with the `VSCE_PAT` and `OVSX_PAT` repository secrets (or Entra ID / Open VSX trusted
+publishing, when set up as in Treeline).
 **Run workflow** republishes the current version to a store that lacks it.

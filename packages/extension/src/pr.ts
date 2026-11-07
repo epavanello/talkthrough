@@ -223,6 +223,56 @@ export const fileAt = async (repo: string, rev: string, path: string) => {
   return result.code === 0 ? result.stdout : '';
 };
 
+/** Lines matching `pattern` (extended regex) in the files at `rev`, as `path:line: text`. */
+export async function searchAt(
+  repo: string,
+  rev: string,
+  pattern: string,
+  options: { paths?: string[]; ignoreCase?: boolean; max?: number } = {}
+) {
+  const max = options.max ?? 200;
+  const args = [
+    'grep',
+    '-n',
+    '-I',
+    '-E',
+    ...(options.ignoreCase ? ['-i'] : []),
+    '-e',
+    pattern,
+    rev
+  ];
+  const result = await run('git', [...args, '--', ...(options.paths ?? [])], {
+    cwd: repo,
+    allowFailure: true
+  });
+  // 1: nothing matched
+  if (result.code > 1) throw new Error(result.stderr.trim() || 'git grep failed');
+  const lines = result.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => line.slice(rev.length + 1).slice(0, 240));
+  if (!lines.length) return 'No match.';
+  const more =
+    lines.length > max ? `\n… ${lines.length - max} more: narrow the pattern or the paths.` : '';
+  return lines.slice(0, max).join('\n') + more;
+}
+
+/** The PR's commits, oldest first: short hash and subject. */
+export const commitsOf = async (info: PrInfo) =>
+  (
+    await git(
+      info.repo,
+      'log',
+      '--reverse',
+      '--format=%h %s',
+      '-n',
+      '100',
+      `${info.mergeBase}..${info.headSha}`
+    )
+  )
+    .split('\n')
+    .filter(Boolean);
+
 /** Marks files as Viewed on GitHub, or takes the mark back (`isViewed` false). */
 export async function markViewed(at: RepoRef, prId: string, paths: string[], isViewed = true) {
   if (!paths.length) return;

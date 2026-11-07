@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeRequirement } from '../src/requirements';
+import { claudeRequirement, hasChrome } from '../src/requirements';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 const status = (fields: Record<string, unknown>) =>
@@ -38,5 +38,24 @@ describe('claudeRequirement', () => {
       detail: 'Your sign-in expires in 2 days.',
       fix: 'claude auth login'
     });
+  });
+});
+
+describe('hasChrome', () => {
+  const doctor = (status: string) =>
+    JSON.stringify({
+      checks: [
+        { id: 'env.version', status: 'pass' },
+        { id: 'chrome.installed', status }
+      ]
+    });
+
+  it("GIVEN agent-browser's doctor WHEN read THEN only a failed Chrome check says no", () => {
+    expect(hasChrome(doctor('pass'))).toBe(true);
+    expect(hasChrome(doctor('fail'))).toBe(false);
+    expect(hasChrome(doctor('warn'))).toBe(true);
+    // An answer it can't read doesn't hold the panel back
+    expect(hasChrome('not json')).toBe(true);
+    expect(hasChrome(JSON.stringify({ checks: [] }))).toBe(true);
   });
 });

@@ -16,6 +16,12 @@ import type { TalkthroughApi } from '../src/extension';
 
 /** e2e/fake-claude.mjs, from the bundled test in .cache/e2e. */
 const FAKE_CLAUDE = path.resolve(__dirname, '../../e2e/fake-claude.mjs');
+/** e2e/fake-agent-browser.mjs: the browser panel's CLI. */
+const FAKE_AGENT_BROWSER = path.resolve(__dirname, '../../e2e/fake-agent-browser.mjs');
+const BROWSER_LOG = path.join(tmpdir(), `talkthrough-ab-${process.pid}.log`);
+/** What the fake's dictation hears, when the file is there (FAKE_CLAUDE_DICTATION). */
+const DICTATION = path.join(tmpdir(), `talkthrough-dictation-${process.pid}.txt`);
+process.env.FAKE_CLAUDE_DICTATION = DICTATION;
 
 const GIT_ENV = {
   ...process.env,
@@ -87,10 +93,19 @@ describe('Talkthrough review session', function () {
     assert.ok(extension, 'the extension is installed');
     api = await extension.activate();
     await api.forget();
+    process.env.FAKE_AGENT_BROWSER_LOG = BROWSER_LOG;
+    await vscode.workspace
+      .getConfiguration('talkthrough')
+      .update('browser.path', FAKE_AGENT_BROWSER, vscode.ConfigurationTarget.Global);
     repo = fixtureRepo();
   });
 
-  after(() => {
+  after(async () => {
+    await vscode.workspace
+      .getConfiguration('talkthrough')
+      .update('browser.path', undefined, vscode.ConfigurationTarget.Global);
+    rmSync(BROWSER_LOG, { force: true });
+    rmSync(`${BROWSER_LOG}.json`, { force: true });
     api.session.end();
     rmSync(repo, { recursive: true, force: true });
   });
@@ -195,7 +210,58 @@ describe('Talkthrough review session', function () {
       'the answer'
     );
 
-    assert.ok(lastClaude()!.text.includes('Ho il contesto.'));
+    assert.ok(
+      lastClaude()!.text.includes('La chiama src/orders.ts:3:'),
+      `the search found the caller: ${lastClaude()!.text}`
+    );
+  });
+
+  it('GIVEN the app WHEN Claude shows it THEN the browser panel opens the page and marks it, then the cues replay', async () => {
+    api.session.send('Mostrami il bottone nel browser');
+
+    await until(() => lastClaude()?.text.includes('Ecco la pagina') ?? false, 'the reply');
+    const calls = () => readFileSync(BROWSER_LOG, 'utf8').trim().split('\n');
+    assert.ok(calls().includes('open http://127.0.0.1:4173/events/42'), calls().join('\n'));
+    assert.ok(calls().includes('get box @e2'));
+    assert.equal(state().browser?.page?.url, 'http://127.0.0.1:4173/events/42');
+    // The link keeps its full address, whatever page is open later
+    const link = lastClaude()!
+      .sentences.flatMap((sentence) => sentence.parts)
+      .find((part) => part.type === 'cue' && part.cue.kind === 'page');
+    assert.equal(link?.type === 'cue' && link.cue.path, 'http://127.0.0.1:4173/events/42');
+    // The tool's mark, then the reply's cue on the same element: one mark, as the voice left it
+    await until(
+      () =>
+        JSON.stringify(state().browser?.marks.map((mark) => [mark.label, mark.kind])) ===
+        '[["Clicca qui","action"]]',
+      "the reply's mark cue"
+    );
+    assert.ok(calls().some((call) => call.startsWith('eval') && call.includes('"kind":"change"')));
+    await until(
+      () =>
+        vscode.window.tabGroups.all
+          .flatMap((group) => group.tabs)
+          .some((tab) => tab.label === 'Browser'),
+      'the browser panel beside the code'
+    );
+    assert.equal(state().browser?.isShown, true);
+
+    const before = calls().length;
+    api.session.play(lastClaude()!.id, 0);
+
+    await until(
+      () =>
+        calls()
+          .slice(before)
+          .some((call) => call.startsWith('eval') && call.includes('"kind":"action"')),
+      'the cues played again: the page stays, the mark is drawn again'
+    );
+    assert.ok(
+      !calls()
+        .slice(before)
+        .some((call) => call.startsWith('open')),
+      'the open page is not reloaded'
+    );
   });
 
   it("GIVEN the mic WHEN pressed twice THEN Claude's dictation sends a dictated prompt", async () => {
@@ -215,6 +281,45 @@ describe('Talkthrough review session', function () {
       'the dictated prompt'
     );
     await until(() => lastClaude()?.text.includes('Domanda dettata') ?? false, 'the answer to it');
+  });
+
+  it('GIVEN a dictation under three words WHEN Claude Code leaves it in its prompt THEN it is sent anyway', async () => {
+    writeFileSync(DICTATION, 'Fatto.');
+    try {
+      const drafts = new Set<string>();
+      api.session.toggleMic();
+      await until(() => {
+        drafts.add(state().draft);
+        return state().draft === 'parole dettate dal test';
+      }, 'the words heard');
+      // Claude Code shows the last dictation again until it hears new words: not what is said
+      assert.ok(!drafts.has('Domanda dettata sul prezzo'), [...drafts].join(' | '));
+      api.session.toggleMic();
+
+      await until(
+        () =>
+          state().messages.some(
+            (message) => message.role === 'user' && message.text === 'Fatto.' && message.isDictated
+          ),
+        'the short dictated prompt'
+      );
+      await until(() => state().status === 'ready', 'the chat free again');
+    } finally {
+      rmSync(DICTATION, { force: true });
+    }
+  });
+
+  it('GIVEN a dictation WHEN cancelled THEN nothing is sent and the chat is free again', async () => {
+    const messages = state().messages.length;
+    api.session.toggleMic();
+    await until(() => state().draft === 'parole dettate dal test', 'the words heard');
+
+    api.session.cancelMic();
+
+    assert.equal(state().isRecording, false);
+    assert.equal(state().status, 'ready');
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    assert.equal(state().messages.length, messages);
   });
 
   it('GIVEN a running turn WHEN stopped THEN the chat is free again and the next prompt arrives alone', async () => {

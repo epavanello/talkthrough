@@ -1,7 +1,8 @@
 # Every push to main whose packages/extension/package.json version has no tag yet is released:
-# tag v<version> + GitHub release with the .vsix and that version's CHANGELOG section, then the stores.
+# tag v<version> + GitHub release with the .vsix files and that version's CHANGELOG section, then the
+# stores. One .vsix per platform carries agent-browser's binary; a universal one serves the others.
 # Pushes that don't change the version publish nothing (and warn if the extension changed anyway).
-# Run by hand (Run workflow) to publish the current version's released .vsix to the stores missing it.
+# Run by hand (Run workflow) to publish the current version's released .vsix files to the stores missing them.
 #
 # Open VSX: trusted publishing (OIDC, no secret), registered for this workflow at
 # open-vsx.org/user-settings/trusted-publishers; enabled by the repository variable
@@ -76,14 +77,17 @@ jobs:
           awk -v v="${TAG#v}" '/^## /{p=($2==v); next} p' packages/extension/CHANGELOG.md > notes.md
           grep -q '[^[:space:]]' notes.md || { echo "::error::Add a '## ${TAG#v}' section to packages/extension/CHANGELOG.md"; exit 1; }
       - run: pnpm test
-      - run: pnpm package
+      - run: pnpm build
+      - name: Package every platform
+        run: pnpm --filter talkthrough exec node scripts/package.mjs --all
       - name: GitHub release (creates the tag)
-        # Already released (a run by hand): publish exactly the .vsix attached to that release
+        # Already released (a run by hand): publish exactly the .vsix files attached to that release
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release download "$TAG" -p talkthrough.vsix -D packages/extension --clobber
+            rm -rf packages/extension/vsix
+            gh release download "$TAG" -p 'talkthrough-*.vsix' -D packages/extension/vsix
           else
-            gh release create "$TAG" packages/extension/talkthrough.vsix --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md
+            gh release create "$TAG" packages/extension/vsix/*.vsix --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md
           fi
       - name: Sign in to Azure as the Marketplace publishing identity
         if: vars.AZURE_CLIENT_ID != ''
@@ -99,21 +103,23 @@ jobs:
           id=$(az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv)
           echo "**Marketplace publishing identity:** \`$id\` (a Contributor of the epavanello publisher)" >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to the VS Code Marketplace
+        working-directory: packages/extension
         run: |
           if [ -n "${{ vars.AZURE_CLIENT_ID }}" ]; then
-            pnpm --filter talkthrough exec vsce publish --no-dependencies --skip-duplicate --packagePath talkthrough.vsix --azure-credential
+            pnpm exec vsce publish --no-dependencies --skip-duplicate --packagePath vsix/*.vsix --azure-credential
           elif [ -n "$VSCE_PAT" ]; then
-            pnpm --filter talkthrough exec vsce publish --no-dependencies --skip-duplicate --packagePath talkthrough.vsix
+            pnpm exec vsce publish --no-dependencies --skip-duplicate --packagePath vsix/*.vsix
           else
-            echo "::notice::VS Code Marketplace: upload the $TAG .vsix from the GitHub release at https://marketplace.visualstudio.com/manage/publishers/epavanello (… → Update)."
-            echo "**VS Code Marketplace:** upload \`talkthrough.vsix\` from the [$TAG release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG) at https://marketplace.visualstudio.com/manage/publishers/epavanello (… → Update)." >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::VS Code Marketplace: upload the $TAG .vsix files from the GitHub release at https://marketplace.visualstudio.com/manage/publishers/epavanello (… → Update)."
+            echo "**VS Code Marketplace:** upload the \`.vsix\` files from the [$TAG release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG) at https://marketplace.visualstudio.com/manage/publishers/epavanello (… → Update)." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Publish to Open VSX
+        working-directory: packages/extension
         run: |
           if [ -n "$OVSX_PAT" ]; then
-            pnpm --filter talkthrough exec ovsx publish talkthrough.vsix --skip-duplicate
+            pnpm exec ovsx publish --packagePath vsix/*.vsix --skip-duplicate
           elif [ "${{ vars.OPENVSX_TRUSTED_PUBLISHING }}" = "true" ]; then
-            pnpm --filter talkthrough exec ovsx publish talkthrough.vsix --skip-duplicate --trusted-publishing
+            pnpm exec ovsx publish --packagePath vsix/*.vsix --skip-duplicate --trusted-publishing
           else
             echo "::notice::Open VSX skipped: trusted publishing isn't enabled yet (repository variable OPENVSX_TRUSTED_PUBLISHING)."
             echo "**Open VSX:** skipped until trusted publishing is enabled." >> "$GITHUB_STEP_SUMMARY"

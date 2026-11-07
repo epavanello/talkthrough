@@ -69,11 +69,16 @@ export interface Hotspot {
   anchors: string[];
 }
 
-export type CueKind = 'show' | 'open' | 'refs';
+/** show, open and refs act on code; page opens the app in the browser panel, mark points at it. */
+export type CueKind = 'show' | 'open' | 'refs' | 'page' | 'mark';
 
-/** A stage direction inside a reply: `[[show src/a.ts#L10-20]]`. */
+/**
+ * A stage direction inside a reply: `[[show src/a.ts#L10-20]]`, `[[page /events/42]]`,
+ * `[[mark @e3 The new guard]]`.
+ */
 export interface Cue {
   kind: CueKind;
+  /** A repository path; page: a URL or path; mark: an @ref or a CSS selector. */
   path: string;
   start: number | null;
   end: number | null;
@@ -167,6 +172,8 @@ export interface Requirement {
   detail: string;
   /** A command that fixes it, typed into a terminal for the person to run. */
   fix?: string;
+  /** Not needed to review: shown with the others, never alone. */
+  isOptional?: boolean;
   url?: string;
 }
 
@@ -200,17 +207,24 @@ export interface ReviewState {
   isTerminalShown: boolean;
   /** The PR moved past the head under review: its new head, and how many commits (null: rewritten). */
   newHead: { sha: string; commits: number | null } | null;
+  /** The browser panel: null without agent-browser, or with talkthrough.browser.enabled off. */
+  browser: { isShown: boolean; page: BrowserPage | null; marks: BrowserMark[] } | null;
   /** The reviews kept for this repository, most recent first (the open one included). */
   reviews: ReviewSummary[];
   /** Null until checked. */
   requirements: Requirement[] | null;
 }
 
-/** The keyboard shortcuts, as package.json binds them (a test keeps the two the same). */
-export const SHORTCUTS: { command: string; key: string; label: string }[] = [
+/**
+ * The keyboard shortcuts, as package.json binds them (a test keeps the two the same); `mac` when a
+ * Mac's differs.
+ */
+export const SHORTCUTS: { command: string; key: string; mac?: string; label: string }[] = [
+  // Claude Code's own; not where it means something else (an editor you type in, the terminal)
   {
     command: 'talkthrough.toggleMic',
-    key: 'ctrl+alt+space',
+    key: 'ctrl+d',
+    mac: 'cmd+d',
     label: 'Talk, then send what you said'
   },
   { command: 'talkthrough.next', key: 'ctrl+alt+right', label: 'Next: this step is clear' },
@@ -264,6 +278,7 @@ export const EMPTY_STATE: ReviewState = {
   choices: { model: '', effort: '' },
   isTerminalShown: false,
   newHead: null,
+  browser: null,
   reviews: [],
   requirements: null
 };
@@ -293,6 +308,8 @@ export interface HostApi {
   resume(): Promise<void>;
   /** A new Claude session on the same PR (it prepares again). */
   restart(): Promise<void>;
+  /** Shows the browser panel, or hides it when shown. */
+  toggleBrowser(): Promise<void>;
   /** Brings the review to the PR's new head: only what changed is to review again. */
   update(): Promise<void>;
   /** Answers Claude's trust dialog: this folder is trusted. */
@@ -305,6 +322,8 @@ export interface HostApi {
   choose(setting: Choice, value: string): Promise<void>;
   send(text: string): Promise<void>;
   toggleMic(): Promise<void>;
+  /** Drops the dictation under way: nothing is sent. */
+  cancelMic(): Promise<void>;
   /** The diffs of this step are clear: mark them ok and go on. */
   next(): Promise<void>;
   /** Stops Claude's current turn (Esc in its terminal). */
@@ -327,11 +346,129 @@ export interface HostApi {
   openUrl(url: string): Promise<void>;
 }
 
-export type HostEvent = { event: 'state'; state: ReviewState };
+export interface BrowserPage {
+  url: string;
+  title: string;
+}
+
+/** A labelled box Claude drew on the page: what the PR changed, what to do, or a note. */
+export interface BrowserMark {
+  id: string;
+  label: string;
+  kind: 'change' | 'action' | 'note';
+}
+
+/** Input the person gives the page in the panel, as agent-browser's stream takes it. */
+export type BrowserInput =
+  | {
+      type: 'input_mouse';
+      eventType: 'mousePressed' | 'mouseReleased' | 'mouseMoved' | 'mouseWheel';
+      x: number;
+      y: number;
+      button?: 'left' | 'right' | 'middle' | 'none';
+      clickCount?: number;
+      deltaX?: number;
+      deltaY?: number;
+      modifiers?: number;
+    }
+  | {
+      type: 'input_keyboard';
+      eventType: 'keyDown' | 'rawKeyDown' | 'keyUp' | 'char';
+      key?: string;
+      code?: string;
+      text?: string;
+      /** What Chrome acts on for keys that edit or move (arrows, Backspace, Tab…). */
+      windowsVirtualKeyCode?: number;
+      modifiers?: number;
+    };
+
+/** A key as the webview's KeyboardEvent has it; `keyCode` is Chromium's Windows virtual key code. */
+export interface KeyPress {
+  key: string;
+  code: string;
+  keyCode: number;
+  /** Alt 1, Ctrl 2, Meta 4, Shift 8: CDP's bits. */
+  modifiers: number;
+}
+
+/**
+ * A key, for the page: a printable one (Enter too) is a keyDown carrying its text, the others a
+ * rawKeyDown with their virtual key code, which is what moves the caret or deletes in Chrome.
+ */
+export function keyInput(press: KeyPress, isUp = false): BrowserInput {
+  const { key, code, keyCode: windowsVirtualKeyCode, modifiers } = press;
+  if (isUp)
+    return {
+      type: 'input_keyboard',
+      eventType: 'keyUp',
+      key,
+      code,
+      windowsVirtualKeyCode,
+      modifiers
+    };
+  const isCommand = (modifiers & 0b110) !== 0;
+  const text = key === 'Enter' ? '\r' : key.length === 1 && !isCommand ? key : undefined;
+  return {
+    type: 'input_keyboard',
+    eventType: text ? 'keyDown' : 'rawKeyDown',
+    key,
+    code,
+    windowsVirtualKeyCode,
+    modifiers,
+    ...(text ? { text } : {})
+  };
+}
+
+/**
+ * ⌘ with ← → and Backspace on macOS, as keys Chrome acts on: Home, End, and Shift+Home then
+ * Backspace (it moves by words with ⌥ itself, not by lines with ⌘).
+ */
+export function macKeys(press: KeyPress): KeyPress[] {
+  const META = 4;
+  if (!(press.modifiers & META)) return [press];
+  const modifiers = press.modifiers & ~META;
+  if (press.key === 'ArrowLeft') return [{ key: 'Home', code: 'Home', keyCode: 36, modifiers }];
+  if (press.key === 'ArrowRight') return [{ key: 'End', code: 'End', keyCode: 35, modifiers }];
+  if (press.key === 'Backspace')
+    return [
+      { key: 'Home', code: 'Home', keyCode: 36, modifiers: 8 },
+      { ...press, modifiers: 0 }
+    ];
+  return [press];
+}
+
+/** Editing the person asks of the page with ⌘ (Ctrl): Chrome on macOS has no keys for these. */
+export type BrowserEdit = 'selectAll' | 'copy' | 'cut' | 'undo' | 'redo';
+
+/** What the browser panel's webview can ask the extension host. */
+export interface BrowserApi {
+  /** Starts the browser and its live view if needed; the page and marks. */
+  connect(): Promise<{ page: BrowserPage | null; marks: BrowserMark[] }>;
+  navigate(url: string): Promise<void>;
+  go(action: 'back' | 'forward' | 'reload'): Promise<void>;
+  input(event: BrowserInput): Promise<void>;
+  /** The viewport, in CSS pixels at the panel's pixel ratio: the page fits the panel, sharp. */
+  resize(width: number, height: number, scale: number): Promise<void>;
+  /** Pasted or composed text, typed into the focused field. */
+  insertText(text: string): Promise<void>;
+  /** Select all, undo, redo; copy and cut put the page's selection on the clipboard. */
+  edit(command: BrowserEdit): Promise<void>;
+  showMark(id: string): Promise<void>;
+  clearMarks(): Promise<void>;
+}
+
+export type HostEvent =
+  | { event: 'state'; state: ReviewState }
+  /** A frame of the browser's live view: a JPEG and the viewport it shows. */
+  | { event: 'frame'; data: string; width: number; height: number }
+  | { event: 'browser'; page: BrowserPage | null; marks: BrowserMark[]; isLive: boolean }
+  /** What the browser just did, in a few words. */
+  | { event: 'activity'; text: string };
 
 export interface RpcRequest {
   id: number;
-  method: keyof HostApi;
+  /** A method of HostApi, or of BrowserApi for the browser panel. */
+  method: string;
   args: unknown[];
 }
 

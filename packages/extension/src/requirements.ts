@@ -62,11 +62,56 @@ export function claudeRequirement(output: string | null, now = Date.now()): Requ
   };
 }
 
-export async function checkRequirements(claude: string): Promise<Requirement[]> {
-  const [claudeStatus, gh, python] = await Promise.all([
+/** Whether `agent-browser doctor --json` found a Chrome to run: only a failed check says no. */
+export function hasChrome(doctor: string) {
+  try {
+    const { checks } = JSON.parse(doctor) as { checks?: { id: string; status: string }[] };
+    const check = checks?.find((one) => one.id === 'chrome.installed');
+    return check?.status !== 'fail';
+  } catch {
+    return true;
+  }
+}
+
+/** The browser panel's: agent-browser (the one the .vsix carries, or installed), and a Chrome. */
+async function browserRequirement(
+  bin: string,
+  version: Awaited<ReturnType<typeof tryRun>>
+): Promise<Requirement> {
+  const name = 'Browser panel';
+  if (!version || version.code !== 0)
+    return {
+      name,
+      state: 'warn',
+      isOptional: true,
+      detail: 'Optional: install agent-browser, and Claude shows the app beside the code.',
+      fix: 'npm install -g agent-browser',
+      url: 'https://github.com/vercel-labs/agent-browser'
+    };
+  const doctor = await tryRun(bin, ['doctor', '--offline', '--quick', '--json']);
+  if (doctor && !hasChrome(doctor.stdout)) {
+    const command = /\s/.test(bin) ? `"${bin}"` : bin;
+    return {
+      name,
+      state: 'warn',
+      isOptional: true,
+      detail: 'No Chrome found: install it, or let agent-browser download one for the panel.',
+      fix: `${process.platform === 'win32' && command !== bin ? '& ' : ''}${command} install`
+    };
+  }
+  return { name, state: 'ok', detail: version.stdout.trim() };
+}
+
+/** `browser`: the agent-browser CLI when the browser panel is on. */
+export async function checkRequirements(
+  claude: string,
+  browser: string | null
+): Promise<Requirement[]> {
+  const [claudeStatus, gh, python, agentBrowser] = await Promise.all([
     tryRun(claude, ['auth', 'status', '--json']),
     tryRun('gh', ['auth', 'status']),
-    tryRun('python3', ['--version'])
+    tryRun('python3', ['--version']),
+    browser ? tryRun(browser, ['--version']) : null
   ]);
   const requirements: Requirement[] = [
     claudeRequirement(
@@ -91,6 +136,7 @@ export async function checkRequirements(claude: string): Promise<Requirement[]> 
           fix: 'xcode-select --install'
         }
   ];
+  if (browser) requirements.push(await browserRequirement(browser, agentBrowser));
   if (process.platform !== 'darwin')
     requirements.push({
       name: 'Voice',

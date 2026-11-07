@@ -1,8 +1,10 @@
 /**
  * Stands in for the extension host so the chat runs in a plain browser
  * (`pnpm --filter @talkthrough/webview dev:browser`): RPC calls are logged, and `?scene=` picks
- * what to show — `home`, `setup` (requirements missing), `preparing`, `review` (default), `update`, `trust`,
- * `error` — with `&theme=light` for a light theme and `&width=280` for a narrow side bar.
+ * what to show — `home`, `setup` (requirements missing), `preparing`, `review` (default), `update`,
+ * `browser` (the browser panel), `trust`, `recording` (dictation),
+ * `error` — with `&theme=light` for a light theme, `&width=280` for a narrow side bar and
+ * `&voice=off` for the voice turned off.
  */
 import {
   EMPTY_STATE,
@@ -275,6 +277,13 @@ const SCENES: Record<string, Partial<ReviewState>> = {
     activity: 'Claude asks whether you trust this folder.',
     pr: { ...pr, isLive: true }
   },
+  recording: {
+    ...review,
+    status: 'recording',
+    activity: 'Listening',
+    isRecording: true,
+    draft: 'E il controller degli ordini passa ancora dalla cache'
+  },
   error: {
     ...review,
     status: 'error',
@@ -286,6 +295,7 @@ const SCENES: Record<string, Partial<ReviewState>> = {
 
 const state = { ...review, ...SCENES[scene], reviews } as ReviewState;
 if (scene === 'setup') state.reviews = [];
+if (params.get('voice') === 'off') state.isSpeechOn = false;
 
 const PULLS: PullItem[] = [
   {
@@ -323,8 +333,91 @@ const PULLS: PullItem[] = [
   }
 ];
 
+/** The browser panel's scene (`?scene=browser`): a fake page of the app, with two marks. */
+const BROWSER_PAGE = {
+  url: 'http://localhost:5173/events/42/reschedule',
+  title: 'Reschedule · Pack'
+};
+const BROWSER_MARKS = [
+  {
+    id: 'm1',
+    label: 'Changed: only the mentor or the manager reschedules',
+    kind: 'change' as const
+  },
+  { id: 'm2', label: 'Pick a new slot, then confirm', kind: 'action' as const }
+];
+
+function drawPage() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1000;
+  canvas.height = 640;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = '#f6f7f9';
+  g.fillRect(0, 0, 1000, 640);
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, 1000, 56);
+  g.fillStyle = '#111827';
+  g.font = '600 18px system-ui';
+  g.fillText('Pack', 24, 35);
+  g.font = '600 26px system-ui';
+  g.fillText('Reschedule your session', 48, 120);
+  g.font = '15px system-ui';
+  g.fillStyle = '#4b5563';
+  g.fillText('Mentoring with Ada Lovelace · 45 minutes', 48, 150);
+  const slots = ['Tue 12 · 09:00', 'Tue 12 · 11:30', 'Wed 13 · 15:00', 'Thu 14 · 10:00'];
+  slots.forEach((slot, index) => {
+    g.fillStyle = index === 1 ? '#e0ecff' : '#ffffff';
+    g.fillRect(48 + index * 200, 190, 180, 56);
+    g.strokeStyle = index === 1 ? '#2f81f7' : '#d1d5db';
+    g.strokeRect(48 + index * 200, 190, 180, 56);
+    g.fillStyle = '#111827';
+    g.fillText(slot, 66 + index * 200, 223);
+  });
+  g.fillStyle = '#111827';
+  g.fillRect(48, 290, 200, 44);
+  g.fillStyle = '#ffffff';
+  g.font = '600 15px system-ui';
+  g.fillText('Confirm reschedule', 76, 318);
+  // The marks, as the page draws them
+  const mark = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    color: string,
+    text: string,
+    dashed: boolean
+  ) => {
+    g.setLineDash(dashed ? [6, 4] : []);
+    g.strokeStyle = color;
+    g.lineWidth = 2;
+    g.strokeRect(x, y, w, h);
+    g.setLineDash([]);
+    g.font = '600 12px system-ui';
+    const width = g.measureText(text).width + 16;
+    g.fillStyle = color;
+    g.fillRect(x - 2, y - 24, width, 20);
+    g.fillStyle = '#ffffff';
+    g.fillText(text, x + 6, y - 10);
+  };
+  mark(44, 286, 208, 52, '#2f81f7', '1  Changed: only the mentor or the manager reschedules', true);
+  mark(244, 186, 188, 64, '#1a7f37', '2  Pick a new slot, then confirm', false);
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+if (scene === 'browser') {
+  document.body.dataset.view = 'browser';
+  setTimeout(() => {
+    const send = (event: unknown) => window.postMessage(event, '*');
+    send({ event: 'browser', page: BROWSER_PAGE, marks: BROWSER_MARKS, isLive: true });
+    send({ event: 'frame', data: drawPage(), width: 1000, height: 640 });
+    send({ event: 'activity', text: 'click @e7' });
+  }, 300);
+}
+
 const answer = (request: RpcRequest) => {
   if (request.method === 'getState') return state;
+  if (request.method === 'connect') return { page: BROWSER_PAGE, marks: BROWSER_MARKS };
   if (request.method === 'listPulls') {
     const [filter, words] = request.args as [string, string];
     const items =

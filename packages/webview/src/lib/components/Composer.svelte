@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, Mic, SendHorizontal, Square } from '@lucide/svelte';
+  import { ArrowRight, Mic, SendHorizontal, Square, X } from '@lucide/svelte';
   import { app, shortcutOf } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
@@ -54,15 +54,27 @@
         </p>
       {/if}
     </div>
-    <Button
-      size="sm"
-      icon={SendHorizontal}
-      hint={{ body: 'Stop listening and send what was said.', note: talkKey }}
-      disabled={!isRecording}
-      onclick={() => host.toggleMic()}
-    >
-      Send <kbd class="hidden border-current/40 text-current @xs:inline">{talkKey}</kbd>
-    </Button>
+    <div class="flex gap-1.5">
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={X}
+        hint="Stop listening and send nothing"
+        onclick={() => host.cancelMic()}
+      >
+        Cancel
+      </Button>
+      <Button
+        class="flex-1"
+        size="sm"
+        icon={SendHorizontal}
+        hint={{ body: 'Stop listening and send what was said.', note: talkKey }}
+        disabled={!isRecording}
+        onclick={() => host.toggleMic()}
+      >
+        Send
+      </Button>
+    </div>
   {:else}
     <textarea
       bind:value={text}
@@ -85,7 +97,7 @@
         disabled={!app.canTalk}
         onclick={() => host.toggleMic()}
       >
-        Talk <kbd class="hidden @xs:inline">{talkKey}</kbd>
+        Talk
       </Button>
       {#if text.trim()}
         <Button variant="ghost" size="sm" icon={SendHorizontal} onclick={handleSend}>Send</Button>

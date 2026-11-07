@@ -22,7 +22,7 @@ let session: ReviewSession | undefined;
 
 export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
   const log = vscode.window.createOutputChannel('Talkthrough', { log: true });
-  const review = new ReviewSession(ctx);
+  const review = new ReviewSession(ctx, log);
   session = review;
   const fail = (error: unknown) => {
     log.error(error as Error);
@@ -103,9 +103,11 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     checkoutPr: () => review.checkoutPr().catch(fail),
     choose: (setting, value) => review.choose(setting, value),
     update: () => review.update(),
+    toggleBrowser: () => review.toggleBrowser(),
     toggleTerminal: async () => review.toggleTerminal(),
     send: async (text) => review.send(text),
     toggleMic: async () => review.toggleMic(),
+    cancelMic: async () => review.cancelMic(),
     next: async () => review.next(),
     interrupt: async () => review.interrupt(),
     play: async (messageId, sentence) => review.play(messageId, sentence),
@@ -114,7 +116,12 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     replayLast: async () => review.replayLast(),
     stopSpeech: async () => review.stopSpeech(),
     setSpeech: async (isOn) => review.setSpeech(isOn),
-    runCue: (cue) => review.runCue(cue),
+    runCue: (cue) =>
+      review.runCue(cue).catch((error: Error) => {
+        // What Claude would be told ("Ask the person to …") is said to the person plainly
+        const text = error.message.replace(/\s*Ask the person[^.]*\.$/, '');
+        void vscode.window.showWarningMessage(`Talkthrough: ${text}`);
+      }),
     showHunk: (id) => review.showHunk(id),
     setHunks: async (ids, state) => review.setHunks(ids, state),
     reset: async () => {
@@ -161,7 +168,8 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       review.openWorktree().catch(fail)
     ),
     vscode.commands.registerCommand('talkthrough.checkout', () => review.checkoutPr().catch(fail)),
-    vscode.commands.registerCommand('talkthrough.update', () => review.update())
+    vscode.commands.registerCommand('talkthrough.update', () => review.update()),
+    vscode.commands.registerCommand('talkthrough.browser', () => review.toggleBrowser())
   );
 
   return {
@@ -169,7 +177,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     startLocal: (input, options) => review.start({ kind: 'local', ...input }, options),
     reopen: async () => {
       await review.flush();
-      const next = new ReviewSession(ctx);
+      const next = new ReviewSession(ctx, log);
       await next.ready;
       return next;
     },

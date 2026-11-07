@@ -7,3 +7,4 @@ dist
 .claude/
 .vitest
 packages/extension/README.md
+packages/extension/bin

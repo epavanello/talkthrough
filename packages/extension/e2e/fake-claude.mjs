@@ -9,6 +9,7 @@
  * - FAKE_CLAUDE_FAILS: a file holding a count; while above 0, a resume finds no conversation.
  * - FAKE_CLAUDE_TRUST: a file; while missing, the folder isn't trusted and a trust dialog shows.
  * - FAKE_CLAUDE_LIST_DELAY: ms before the MCP tools are listed, after SessionStart.
+ * - FAKE_CLAUDE_DICTATION: a file; when there, what dictation hears.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -54,6 +55,15 @@ const drawn = (line) => {
     .join('');
 };
 const write = (line) => process.stdout.write(`${drawn(line)}\r\n`);
+/** The input box, holding `text`. */
+const box = (text) => `${RULE}\r\n❯ ${text}\r\n${RULE}\r\n`;
+/** What dictation hears: FAKE_CLAUDE_DICTATION's file when there, read each time. */
+const dictated = () => {
+  const file = process.env.FAKE_CLAUDE_DICTATION;
+  return file && existsSync(file)
+    ? readFileSync(file, 'utf8').trim()
+    : 'Domanda dettata sul prezzo';
+};
 
 function runHook(event, input) {
   const commands = (settings.hooks[event] ?? []).flatMap((group) =>
@@ -148,6 +158,14 @@ async function turn(prompt) {
   } else if (prompt === 'Avanti' || prompt === 'Next') {
     reply =
       '[[show src/price.ts#L2-2]] Qui resolvePrice usa Math.ceil. [[open src/orders.ts#L3]] Il controller la chiama prima di salvare.';
+  } else if (/browser/i.test(prompt)) {
+    await tool('browser_open', { url: 'http://127.0.0.1:4173/events/42' });
+    await tool('browser_mark', { target: '@e2', label: 'Il guard di reschedule', kind: 'change' });
+    reply =
+      '[[page /events/42]] Ecco la pagina del reschedule. [[mark @e2 action: Clicca qui]] Questo è il bottone protetto.';
+  } else if (/chiamata|called/i.test(prompt)) {
+    const [first] = (await tool('pr_search', { pattern: 'resolvePrice\\(' })).split('\n');
+    reply = `Hai chiesto: ${prompt}. La chiama ${first}`;
   } else {
     reply = `Hai chiesto: ${prompt}. ${context.includes('<talkthrough>') ? 'Ho il contesto.' : 'Niente contesto.'}`;
   }
@@ -198,6 +216,7 @@ if (trust && !existsSync(trust)) {
 
 let buffer = '';
 let isRecording = false;
+let lastDictated = '';
 process.stdin.on('data', (data) => {
   for (const char of data.replace(/\x1b\[20[01]~/g, '')) {
     if (char === '\r') {
@@ -206,12 +225,30 @@ process.stdin.on('data', (data) => {
       if (prompt) enqueue(prompt);
     } else if (char === ' ' && buffer === '') {
       isRecording = !isRecording;
-      write(isRecording ? 'Voice: listening' : 'Voice: processing…');
       // What Claude Code does while dictating: the words show in its prompt box
-      if (isRecording) process.stdout.write(`${RULE}\r\n❯ parole dettate dal test\r\n${RULE}\r\n`);
-      if (!isRecording) enqueue('Domanda dettata sul prezzo');
+      if (isRecording) {
+        write('Voice: listening');
+        // Like Claude Code, the last dictation shows again until new words are heard
+        if (lastDictated) process.stdout.write(box(lastDictated));
+        setTimeout(() => isRecording && process.stdout.write(box('parole dettate dal test')), 400);
+      } else {
+        process.stdout.write(box('parole dettate dal test'));
+        write('Voice: processing…');
+        setTimeout(() => {
+          const said = dictated();
+          lastDictated = said;
+          process.stdout.write(box(said));
+          // It sends from three words on; a shorter transcript waits in the prompt for Enter
+          if (said.split(/\s+/).length >= 3) enqueue(said);
+          else buffer = said;
+        }, 300);
+      }
     } else if (char === '\x15') {
       buffer = '';
+    } else if (char === '\x1b' && isRecording) {
+      // Esc while dictating: the recording is dropped, the prompt left as it was
+      isRecording = false;
+      process.stdout.write(box(''));
     } else if (char === '\x1b') {
       if (running) {
         buffer = running.prompt;

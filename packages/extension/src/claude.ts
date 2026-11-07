@@ -41,18 +41,12 @@ export const HOOKS = {
   Stop: 'stop'
 } as const;
 
-/** Read-only review: what the session may use without asking (dontAsk denies the rest). */
-const ALLOWED_TOOLS = [
-  'mcp__talkthrough',
-  'Read',
-  'Grep',
-  'Glob',
-  'Bash(git log:*)',
-  'Bash(git show:*)',
-  'Bash(git diff:*)',
-  'Bash(git grep:*)',
-  'Bash(git blame:*)'
-];
+/**
+ * Read-only review: what the session may use without asking (dontAsk denies the rest). No shell:
+ * the PR is someone else's text, and a git flag can write files or run a pager. The stage's tools
+ * search and read the PR head; Grep and Glob are for CLIs that still have them.
+ */
+const ALLOWED_TOOLS = ['mcp__talkthrough', 'Read', 'Grep', 'Glob'];
 
 /** The hook command: posts the hook's input to the extension; curl prints the answer back. */
 const hookCommand = (path: string) =>
@@ -121,6 +115,13 @@ export function promptIn(rows: { text: string; isDim: boolean }[]) {
   return '';
 }
 
+/** Whether dictation is still being turned into text: the footer, below the input box, says so. */
+export function isTranscribingIn(rows: { text: string }[]) {
+  let end = rows.length - 1;
+  while (end >= 0 && !/^\s*─{8,}/.test(rows[end].text)) end--;
+  return rows.slice(end + 1).some((row) => /Voice: processing/.test(row.text));
+}
+
 const ANSI =
   /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[PX^_][^\x1b]*\x1b\\|\x1b[=>()][0-9A-Za-z]?|\x1b./g;
 /** Cursor moves Claude Code draws spaces and line breaks with: `No\x1b[4Gconversation`. */
@@ -176,6 +177,10 @@ export class ClaudeProcess {
     return promptIn(this.screenRows());
   }
 
+  isTranscribing() {
+    return isTranscribingIn(this.screenRows());
+  }
+
   start(command: string[], cwd: string, env: NodeJS.ProcessEnv, cols = 120, rows = 40) {
     const child = spawn(this.python, [this.bridge, String(cols), String(rows), '--', ...command], {
       cwd,
@@ -226,13 +231,20 @@ export class ClaudeProcess {
   }
 
   /**
-   * Space, in tap mode: starts dictation, or stops it and sends what was said. It starts only on an
-   * empty prompt (elsewhere it is a space), so starting empties it first.
+   * Space, in tap mode: starts dictation, or stops it and sends what was said (from three words on:
+   * a shorter transcript stays in the prompt). It starts only on an empty prompt (elsewhere it is a
+   * space), so starting empties it first.
    */
   toggleDictation(isStarting: boolean) {
     if (!isStarting) return this.write(' ');
     this.clearInput();
     setTimeout(() => this.write(' '), 60);
+  }
+
+  /** Esc while dictating: Claude Code drops the recording and puts the prompt back as it was. */
+  cancelDictation() {
+    this.write('\x1b');
+    setTimeout(() => this.clearInput(), 300);
   }
 
   /** Esc: stops Claude's turn. */

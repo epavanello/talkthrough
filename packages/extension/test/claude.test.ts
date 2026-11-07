@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ClaudeProcess, claudeArgs, plain, promptIn } from '../src/claude';
+import { ClaudeProcess, claudeArgs, isTranscribingIn, plain, promptIn } from '../src/claude';
 
 const BRIDGE = fileURLToPath(new URL('../resources/ptybridge.py', import.meta.url));
 
@@ -23,6 +23,7 @@ describe('claudeArgs', () => {
     const mcp = JSON.parse(args[args.indexOf('--mcp-config') + 1]);
 
     expect(settings.voice).toEqual({ enabled: true, mode: 'tap' });
+    expect(settings.permissions.allow).toEqual(['mcp__talkthrough', 'Read', 'Grep', 'Glob']);
     expect(settings.language).toBe('italian');
     expect(settings.enabledPlugins).toEqual({ 'earshot@earshot': false });
     expect(Object.keys(settings.hooks)).toEqual([
@@ -97,6 +98,19 @@ describe('promptIn', () => {
 
   it('GIVEN a ❯ outside the input box (a menu) WHEN read THEN it is not the prompt', () => {
     expect(promptIn([row('Allow?'), row('❯ No, disable'), row('  Yes')])).toBe('');
+  });
+});
+
+describe('isTranscribingIn', () => {
+  const RULE = '─'.repeat(40);
+  const rows = (...texts: string[]) => texts.map((text) => ({ text }));
+
+  it('GIVEN the footer under the input box WHEN dictation is processed THEN it is transcribing', () => {
+    expect(isTranscribingIn(rows(RULE, '❯ fatto', RULE, '  Voice: processing…'))).toBe(true);
+    // Done: the footer moved on; the words above the box are old output
+    expect(
+      isTranscribingIn(rows('Voice: processing…', RULE, '❯ Fatto.', RULE, '  ? for shortcuts'))
+    ).toBe(false);
   });
 });
 

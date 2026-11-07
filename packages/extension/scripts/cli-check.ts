@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { ClaudeProcess, claudeArgs } from '../src/claude';
 import { systemPrompt } from '../src/prompts';
 import { ReviewServer } from '../src/server';
-import { TOOLS, mapProblems, type MapInput } from '../src/tools';
+import { BROWSER_TOOLS, TOOLS, mapProblems, type MapInput } from '../src/tools';
 
 const cwd = process.argv[2] ?? fileURLToPath(new URL('../../..', import.meta.url));
 const bridge = fileURLToPath(new URL('../resources/ptybridge.py', import.meta.url));
@@ -34,7 +34,8 @@ const DIFF = `## src/price.ts · modified · +2 −1
 `;
 
 const server = new ReviewServer({
-  tools: () => TOOLS,
+  // The browser's tools too: Claude Code drops a server whose tool schemas it rejects
+  tools: () => [...TOOLS, ...BROWSER_TOOLS],
   onListed: () => log('mcp tools/list'),
   hook: async (event, payload) => {
     if (event === 'prompt') {
@@ -116,7 +117,7 @@ const options = {
   language: 'italian',
   model: 'haiku',
   effort: '',
-  systemPrompt: systemPrompt('italian'),
+  systemPrompt: systemPrompt('italian', true),
   name: 'Talkthrough · PR #1: Round prices up (cli-check)',
   sessionId,
   disabledPlugins: ['earshot@earshot']

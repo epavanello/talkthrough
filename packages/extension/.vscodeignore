@@ -1,6 +1,7 @@
 **
 !dist/**
 !resources/**
+!bin/**
 !package.json
 !README.md
 !LICENSE

@@ -1,4 +1,4 @@
-import type { HostApi, HostEvent, RpcRequest, RpcResponse } from '@talkthrough/shared';
+import type { BrowserApi, HostApi, HostEvent, RpcRequest, RpcResponse } from '@talkthrough/shared';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
@@ -40,3 +40,6 @@ export function onHostEvent(listener: (e: HostEvent) => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+/** The same channel, as the browser panel's webview uses it. */
+export const browserHost = host as unknown as BrowserApi;

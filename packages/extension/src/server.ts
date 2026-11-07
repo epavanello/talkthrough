@@ -21,6 +21,8 @@ export interface ToolSpec {
 export interface ToolResult {
   text: string;
   isError?: boolean;
+  /** An image Claude looks at, base64. */
+  image?: { data: string; mimeType: string };
 }
 
 export interface ServerHandlers {
@@ -164,10 +166,9 @@ export class ReviewServer {
           return fail(-32602, `Unknown tool: ${name}`);
         try {
           const result = await this.handlers.callTool(name, args);
-          return reply({
-            content: [{ type: 'text', text: result.text }],
-            isError: Boolean(result.isError)
-          });
+          const content: Record<string, unknown>[] = [{ type: 'text', text: result.text }];
+          if (result.image) content.push({ type: 'image', ...result.image });
+          return reply({ content, isError: Boolean(result.isError) });
         } catch (error) {
           return reply({
             content: [{ type: 'text', text: (error as Error).message }],

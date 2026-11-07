@@ -31,8 +31,9 @@ import { ClaudeProcess, claudeArgs } from './claude';
 import { cuesOf, parseReply } from './cues';
 import { DELTA_TITLE, carryOver } from './delta';
 import { hunksAt, indexPatch, parsePatch, renderPatch, type ParsedFile } from './patch';
-import { Player, SaySpeaker, type Speaker } from './player';
+import { Player, SaySpeaker } from './player';
 import {
+  commitsOf,
   commitsSince,
   currentHead,
   fileAt,
@@ -42,16 +43,19 @@ import {
   markViewed,
   parsePrRef,
   prDiff,
+  searchAt,
   type LoadedPr
 } from './pr';
 import { git, run } from './proc';
 import { NEXT, kickoff, systemPrompt, updatePrompt } from './prompts';
 import { checkRequirements } from './requirements';
 import { ReviewStore } from './reviews';
+import { Browser, browserBin, markOf, resolveUrl, type MarkKind } from './browser';
+import { BrowserPanel } from './browserPanel';
 import { ReviewServer, type ToolResult } from './server';
 import { Stage } from './stage';
 import { MirrorTerminal } from './terminal';
-import { TOOLS, mapProblems, type MapInput } from './tools';
+import { BROWSER_TOOLS, TOOLS, mapProblems, type MapInput } from './tools';
 
 type LocalInput = {
   kind: 'local';
@@ -131,6 +135,7 @@ const TOOL_LABELS: Record<string, (input: Record<string, unknown>) => string> = 
   mcp__talkthrough__pr_overview: () => 'Reading the overview',
   mcp__talkthrough__pr_diff: () => 'Reading the diff',
   mcp__talkthrough__pr_file: (input) => `Reading ${path.basename(String(input.path ?? ''))}`,
+  mcp__talkthrough__pr_search: (input) => `Searching “${String(input.pattern ?? '').slice(0, 40)}”`,
   mcp__talkthrough__set_map: () => 'Drawing the map',
   mcp__talkthrough__find_references: (input) =>
     `Looking for the references of ${input.symbol ?? 'a symbol'}`,
@@ -223,10 +228,16 @@ export class ReviewSession implements vscode.Disposable {
   private readonly player: Player;
   private readonly stage: Stage;
   private readonly mirror: MirrorTerminal;
+  /** The app in a browser panel (agent-browser): null when off or not installed. */
+  private browser: Browser | null = null;
+  private readonly panel: BrowserPanel;
+  /** The tools the running Claude has: the stage's, and the browser's when it is on. */
+  private tools = TOOLS;
   private readonly listeners = new Set<() => void>();
   private notifyTimer: NodeJS.Timeout | undefined;
   private saveTimer: NodeJS.Timeout | undefined;
   private screenTimer: NodeJS.Timeout | undefined;
+  private dictationTimer: NodeJS.Timeout | undefined;
   private startTimer: NodeJS.Timeout | undefined;
   private retryTimer: NodeJS.Timeout | undefined;
   private saving = Promise.resolve();
@@ -246,24 +257,23 @@ export class ReviewSession implements vscode.Disposable {
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
-    speaker?: Speaker
+    log: vscode.LogOutputChannel
   ) {
     this.store = new ReviewStore(path.join(ctx.globalStorageUri.fsPath, 'reviews'));
     this.server = new ReviewServer({
       hook: (event, payload) => this.handleHook(event, payload),
-      tools: () => TOOLS,
+      tools: () => this.tools,
       callTool: (name, args) => this.callTool(name, args),
       onListed: () => this.listed(),
       instructions:
         'The stage of a Talkthrough PR review: the PR, its hunks, the review map and the editor.'
     });
     this.player = new Player(
-      speaker ??
-        new SaySpeaker(() => ({
-          voice: config().get<string>('speech.voice', ''),
-          rate: config().get<number>('speech.rate', 185)
-        })),
-      (cue) => this.stage.run(cue),
+      new SaySpeaker(() => ({
+        voice: config().get<string>('speech.voice', ''),
+        rate: config().get<number>('speech.rate', 185)
+      })),
+      (cue) => this.runCue(cue),
       () => {
         this.state.player = { ...this.player.state };
         this.changed();
@@ -276,6 +286,12 @@ export class ReviewSession implements vscode.Disposable {
       this.state.isTerminalShown = this.mirror.isShown;
       this.changed();
     });
+    this.panel = new BrowserPanel(
+      ctx.extensionUri,
+      () => this.browser,
+      log,
+      () => this.syncBrowser()
+    );
     this.state.isSpeechOn = config().get<boolean>('speech.enabled', true);
     this.state.choices = { model: config().get('model', ''), effort: config().get('effort', '') };
     // New commits on the PR: looked for every few minutes, and when the window gets focus
@@ -591,6 +607,8 @@ export class ReviewSession implements vscode.Disposable {
 
   private async launch(run: number, mode: { isResume?: boolean; prompt?: string }, attempt = 0) {
     const command = this.command ?? [await resolveClaude()];
+    const hasBrowser = Boolean(await this.browserReady());
+    this.tools = hasBrowser ? [...TOOLS, ...BROWSER_TOOLS] : TOOLS;
     if (run !== this.run) return;
     const pr = this.loaded!.info;
     const claude = new ClaudeProcess(
@@ -612,7 +630,7 @@ export class ReviewSession implements vscode.Disposable {
       language: language(),
       model: config().get<string>('model', ''),
       effort: config().get<string>('effort', ''),
-      systemPrompt: systemPrompt(language()),
+      systemPrompt: systemPrompt(language(), hasBrowser),
       name: `Talkthrough · PR #${pr.number}: ${pr.title}`.slice(0, 100),
       sessionId: this.sessionId,
       resume: mode.isResume,
@@ -687,6 +705,7 @@ export class ReviewSession implements vscode.Disposable {
   private quiet() {
     clearTimeout(this.startTimer);
     clearTimeout(this.retryTimer);
+    clearTimeout(this.dictationTimer);
     this.player.stop();
     this.mirror.close();
     this.state.isRecording = false;
@@ -715,7 +734,8 @@ export class ReviewSession implements vscode.Disposable {
   /** Before the extension host goes: the review saved and Claude gone. */
   async shutdown() {
     this.run++;
-    await Promise.all([this.flush(), this.stopProcess()]);
+    this.panel.dispose();
+    await Promise.all([this.flush(), this.stopProcess(), this.browser?.close()]);
   }
 
   dispose() {
@@ -777,7 +797,7 @@ export class ReviewSession implements vscode.Disposable {
       if (/Voice: processing/i.test(screen) && this.isAwaitingDictation) this.track('Transcribing');
       // What is being dictated shows in Claude's prompt as it is heard
       if (this.state.isRecording || this.isAwaitingDictation) {
-        const draft = claude.promptText();
+        const draft = this.heard(claude.promptText());
         if (draft !== this.state.draft) {
           this.state.draft = draft;
           this.changed();
@@ -789,6 +809,20 @@ export class ReviewSession implements vscode.Disposable {
       else if (/Enter to confirm|Do you want to proceed|Esc to cancel/i.test(screen))
         this.waiting('other', 'Claude is asking something in its terminal.');
     }, 150);
+  }
+
+  /**
+   * What dictation heard so far. Until it hears new words, Claude Code may show the last message
+   * sent in its prompt: that is not what is being said.
+   */
+  private heard(text: string) {
+    const words = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim();
+    const sent = [...this.state.messages].reverse().find((one) => one.role === 'user');
+    return this.state.isRecording && sent && words(text) === words(sent.text) ? '' : text;
   }
 
   /** Answers Claude's trust dialog with its "yes" option, the way its menu takes keys. */
@@ -900,10 +934,35 @@ export class ReviewSession implements vscode.Disposable {
     this.setStatus(this.state.isRecording ? 'recording' : 'ready', null);
     if (!reply.trim()) return;
     const message = this.addMessage('claude', reply);
+    this.pinPages(message);
     this.explain(message);
     // Never talk over the person while they dictate: the cues still move the editor
     const isSilent = !this.state.isSpeechOn || this.state.isRecording;
     this.player.play(message, 0, isSilent);
+  }
+
+  /**
+   * A reply's page cues keep the full address of the page they mean (`/events` on the page open
+   * now): each link works on its own, after a reload too; the chat shows only the path.
+   */
+  private pinPages(message: ChatMessage) {
+    // The page open now, else the last one the chat linked to
+    const base =
+      this.browser?.page?.url ??
+      this.state.messages
+        .flatMap((one) => one.sentences.flatMap((sentence) => sentence.parts))
+        .map((part) => (part.type === 'cue' && part.cue.kind === 'page' ? part.cue.path : ''))
+        .filter((path) => /^https?:/.test(path))
+        .at(-1) ??
+      null;
+    for (const part of message.sentences.flatMap((sentence) => sentence.parts)) {
+      if (part.type !== 'cue' || part.cue.kind !== 'page') continue;
+      try {
+        part.cue.path = resolveUrl(part.cue.path, base);
+      } catch {
+        // No page open to go from: the cue stays as written
+      }
+    }
   }
 
   private addMessage(
@@ -969,6 +1028,15 @@ export class ReviewSession implements vscode.Disposable {
         lines.push('The checkout is not at the PR head: read PR files with pr_file.');
     }
     if (!blocks.length) lines.push('No map yet: set_map once the diff is read.');
+    const page = this.browser?.page;
+    if (page) {
+      const marks = this.browser!.currentMarks.map(
+        (mark) => `${mark.id} “${mark.label}” on ${mark.target}`
+      );
+      lines.push(
+        `Browser panel: ${page.title || 'untitled'} at ${page.url}${marks.length ? `; marks: ${marks.join(', ')}` : ''}.`
+      );
+    }
     return `<talkthrough>\n${lines.join('\n')}\n</talkthrough>`;
   }
 
@@ -1009,7 +1077,19 @@ export class ReviewSession implements vscode.Disposable {
     if (!this.loaded) return { text: 'No review is running.', isError: true };
     switch (name) {
       case 'pr_overview':
-        return { text: this.overview() };
+        return { text: await this.overview() };
+      case 'pr_search':
+        return {
+          text: await searchAt(
+            this.loaded.info.repo,
+            this.loaded.info.headSha,
+            String(args.pattern ?? ''),
+            {
+              paths: Array.isArray(args.paths) ? args.paths.map(String) : [],
+              ignoreCase: args.ignoreCase === true
+            }
+          )
+        };
       case 'pr_diff':
         return { text: this.diff(Array.isArray(args.paths) ? args.paths.map(String) : []) };
       case 'pr_file':
@@ -1029,12 +1109,14 @@ export class ReviewSession implements vscode.Disposable {
       case 'review_state':
         return { text: this.context() };
       default:
+        if (name.startsWith('browser_')) return this.callBrowser(name, args);
         return { text: `Unknown tool ${name}`, isError: true };
     }
   }
 
-  private overview() {
+  private async overview() {
     const { info, body, authorNotes } = this.loaded!;
+    const commits = await commitsOf(info).catch(() => []);
     const files = this.state.files.map((file) => {
       const from = file.previousPath ? ` from ${file.previousPath}` : '';
       const hunks = file.hunks.map((id) => {
@@ -1051,6 +1133,9 @@ export class ReviewSession implements vscode.Disposable {
       'Description:',
       body.trim().slice(0, 8000) || '(none)',
       ...(authorNotes ? ['', 'Author notes:', authorNotes.slice(0, 8000)] : []),
+      '',
+      `Commits (${commits.length}):`,
+      ...commits,
       '',
       `Files (${files.length}) and their hunks:`,
       ...files
@@ -1182,10 +1267,45 @@ export class ReviewSession implements vscode.Disposable {
       this.isAwaitingDictation = true;
       this.setStatus('thinking', null);
       this.track('Transcribing');
+      this.sendShortDictation();
     } else {
       this.state.isRecording = true;
       this.setStatus('recording', 'Listening');
     }
+  }
+
+  cancelMic() {
+    const claude = this.claude;
+    if (!claude || (!this.state.isRecording && !this.isAwaitingDictation)) return;
+    claude.cancelDictation();
+    clearTimeout(this.dictationTimer);
+    this.state.isRecording = false;
+    this.isAwaitingDictation = false;
+    this.state.draft = '';
+    this.setStatus('ready', null);
+  }
+
+  /**
+   * Claude Code sends a dictation by itself only from three words on: a shorter one ("Fatto.") stays
+   * in its prompt. Once the transcript is in and holds still, Enter sends it; with nothing heard in
+   * 30 s, the chat is free again.
+   */
+  private sendShortDictation(started = Date.now(), last = '') {
+    clearTimeout(this.dictationTimer);
+    this.dictationTimer = setTimeout(() => {
+      const claude = this.claude;
+      if (!claude || !this.isAwaitingDictation) return;
+      const text = claude.promptText();
+      const isTranscribing = claude.isTranscribing();
+      if (text && text === last && !isTranscribing) return claude.write('\r');
+      if (!text && !isTranscribing && Date.now() - started > 30_000) {
+        this.isAwaitingDictation = false;
+        this.state.draft = '';
+        this.note('Nothing was heard.');
+        return this.setStatus('ready', null);
+      }
+      this.sendShortDictation(started, text);
+    }, 700);
   }
 
   /** The diffs explained in this step are clear: they become ok, and Claude goes on. */
@@ -1271,8 +1391,18 @@ export class ReviewSession implements vscode.Disposable {
     this.changed();
   }
 
+  /** A cue: the editor's, or the browser panel's (page, mark). */
   async runCue(cue: Cue) {
-    await this.stage.run(cue);
+    if (cue.kind !== 'page' && cue.kind !== 'mark') return this.stage.run(cue);
+    // Paused, or after a reload: the browser comes back for a link clicked in the chat
+    const browser = this.browser ?? (await this.browserReady());
+    if (!browser) return;
+    if (cue.kind === 'page') await browser.open(cue.path);
+    else {
+      const { kind, label } = markOf(cue.symbol ?? '');
+      await browser.mark(cue.path, label, kind);
+    }
+    this.panel.show();
   }
 
   async showHunk(id: string) {
@@ -1305,6 +1435,108 @@ export class ReviewSession implements vscode.Disposable {
   toggleTerminal() {
     if (!this.claude) return this.note('No Claude session is running.');
     this.mirror.toggle(this.claude, `Claude · PR #${this.state.pr?.number ?? ''}`);
+  }
+
+  // ---- the app in the browser panel
+
+  /**
+   * The repository's browser, when talkthrough.browser.enabled is on and agent-browser answers:
+   * one session and profile per repository, so sign-ins stay between reviews.
+   */
+  private browserBin() {
+    return browserBin(this.ctx.extensionPath, config().get<string>('browser.path', ''));
+  }
+
+  private async browserReady() {
+    const key = this.review?.commonDir ?? this.loaded?.info.repo ?? 'default';
+    if (!config().get<boolean>('browser.enabled', true)) {
+      this.browser = null;
+      return this.syncBrowser();
+    }
+    if (this.browser?.key !== key) {
+      const browser = new Browser(
+        {
+          bin: this.browserBin(),
+          key,
+          storage: path.join(this.ctx.globalStorageUri.fsPath, 'browser')
+        },
+        () => this.syncBrowser()
+      );
+      this.browser = (await browser.version()) ? browser : null;
+    }
+    this.syncBrowser();
+    return this.browser;
+  }
+
+  /** The panel's state in the review's, for the side bar. */
+  private syncBrowser() {
+    const browser = this.browser;
+    this.state.browser = browser
+      ? {
+          isShown: this.panel.isShown,
+          page: browser.page,
+          marks: browser.currentMarks.map(({ id, label, kind }) => ({ id, label, kind }))
+        }
+      : null;
+    this.panel.update();
+    this.changed();
+    return null;
+  }
+
+  async toggleBrowser() {
+    if (!(await this.browserReady()))
+      return this.note('The browser panel needs agent-browser: see the start screen.');
+    this.panel.toggle();
+  }
+
+  private async callBrowser(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const browser = this.browser;
+    if (!browser) return { text: 'The browser panel is off.', isError: true };
+    const text = (value: unknown) =>
+      typeof value === 'string' && value.trim() ? value : undefined;
+    const describe = async () => {
+      const page = browser.page;
+      return `${page?.title || 'untitled'} at ${page?.url ?? 'no page'}\n\n${await browser.snapshot()}`;
+    };
+    switch (name) {
+      case 'browser_open':
+        await browser.open(String(args.url ?? ''));
+        this.panel.show();
+        return { text: await describe() };
+      case 'browser_snapshot':
+        return {
+          text: await browser.snapshot({ all: args.all === true, selector: text(args.selector) })
+        };
+      case 'browser_act':
+        await browser.act(String(args.action ?? ''), text(args.target), text(args.value));
+        return { text: await describe() };
+      case 'browser_look':
+        return {
+          text: `${browser.page?.title || 'untitled'} at ${browser.page?.url ?? 'no page'}`,
+          image: { data: await browser.screenshot(args.full === true), mimeType: 'image/jpeg' }
+        };
+      case 'browser_eval':
+        return {
+          text: JSON.stringify(await browser.evaluate(String(args.script ?? ''))) ?? 'undefined'
+        };
+      case 'browser_mark': {
+        if (args.clear === true) {
+          await browser.clearMarks();
+          return { text: 'Marks cleared.' };
+        }
+        const target = text(args.target);
+        if (!target)
+          return { text: 'A target is needed: an @ref or a CSS selector.', isError: true };
+        const kind = (
+          ['change', 'action', 'note'].includes(String(args.kind)) ? args.kind : 'change'
+        ) as MarkKind;
+        const mark = await browser.mark(target, String(args.label ?? ''), kind);
+        this.panel.show();
+        return { text: `Mark ${mark.id} on ${mark.target}.` };
+      }
+      default:
+        return { text: `Unknown tool ${name}`, isError: true };
+    }
   }
 
   // ---- new commits on the PR
@@ -1406,7 +1638,8 @@ export class ReviewSession implements vscode.Disposable {
     if (this.isChecking) return;
     this.isChecking = true;
     try {
-      this.state.requirements = await checkRequirements(await resolveClaude());
+      const browser = config().get<boolean>('browser.enabled', true) ? this.browserBin() : null;
+      this.state.requirements = await checkRequirements(await resolveClaude(), browser);
       this.changed();
     } finally {
       this.isChecking = false;

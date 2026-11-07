@@ -77,6 +77,21 @@ describe('cues with brackets in their paths', () => {
   });
 });
 
+describe('browser cues', () => {
+  it('GIVEN page and mark cues WHEN parsed THEN the URL and the target stay as written', () => {
+    const cues = cuesOf(
+      parseReply(
+        '[[page /events/42?tab=slots]] Ecco la pagina. [[mark @e3 action: Clicca qui]] Questo.'
+      )
+    );
+
+    expect(cues).toEqual([
+      { kind: 'page', path: '/events/42?tab=slots', start: null, end: null, symbol: null },
+      { kind: 'mark', path: '@e3', start: null, end: null, symbol: 'action: Clicca qui' }
+    ]);
+  });
+});
+
 describe('speakable', () => {
   it('GIVEN markdown, code and links WHEN made speakable THEN only the words remain', () => {
     expect(speakable('**Attenzione**: `src/lib/price.ts` usa [questo](https://x.y) - ok')).toBe(

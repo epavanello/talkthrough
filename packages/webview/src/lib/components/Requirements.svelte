@@ -15,7 +15,9 @@
   };
 
   const requirements = $derived(app.state.requirements ?? []);
-  const hasProblems = $derived(requirements.some((one) => one.state !== 'ok'));
+  const hasProblems = $derived(requirements.some((one) => one.state !== 'ok' && !one.isOptional));
+  /** An optional extra not installed, worth a word when nothing else is missing. */
+  const extra = $derived(requirements.find((one) => one.state !== 'ok' && one.isOptional));
 </script>
 
 <!-- Shown only when something is missing: then the whole setup, so what works is clear too -->
@@ -68,4 +70,18 @@
       Check again
     </Button>
   </section>
+{/if}
+{#if !hasProblems && extra}
+  <p class="mx-3 mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+    <span>{extra.name}: {extra.detail}</span>
+    {#if extra.fix}
+      <button
+        class="text-link hover:text-link-hover"
+        title="Types it in a new terminal: press Enter there to run it"
+        onclick={() => host.runInTerminal(extra.fix!)}
+      >
+        {extra.fix}
+      </button>
+    {/if}
+  </p>
 {/if}
