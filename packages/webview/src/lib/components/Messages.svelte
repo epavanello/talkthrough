@@ -96,7 +96,7 @@
 <!-- prettier-ignore -->
 {#snippet parts(sentence: Sentence)}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue'}{@render chip(part.cue)}{/if}{/each}{/snippet}
 <!-- prettier-ignore -->
-{#snippet chip(cue: Cue)}<button class="mx-0.5 inline-flex items-center rounded border px-1 align-baseline font-mono text-[11px] text-link hover:bg-accent" title={cueTitle(cue)} onclick={(event) => { event.stopPropagation(); void host.runCue(cue); }}>{cueLabel(cue)}</button>{/snippet}
+{#snippet chip(cue: Cue)}<button class="mx-0.5 inline-flex items-center rounded border bg-muted px-1 align-baseline font-mono text-[11px] text-link hover:bg-accent" title={cueTitle(cue)} onclick={(event) => { event.stopPropagation(); void host.runCue(cue); }}>{cueLabel(cue)}</button>{/snippet}
 
 {#snippet aside(icon: typeof Info, text: string)}
   {@const Icon = icon}
@@ -150,7 +150,8 @@
                   data-sentence="{message.id}-{index}"
                   title="Read from here"
                   class={cn(
-                    'cursor-pointer rounded px-0.5 transition-colors hover:bg-accent',
+                    // A chip's own hover, not the sentence's, when the pointer is on it
+                    'cursor-pointer rounded px-0.5 transition-colors hover:not-has-[button:hover]:bg-accent',
                     isCurrent(message, index) &&
                       (app.state.player.isPlaying
                         ? 'bg-selection text-selection-foreground'

@@ -73,6 +73,22 @@ try {
     `document.querySelectorAll('#__talkthrough_marks [data-mark]').length`
   );
   check('a mark is drawn on the page', mark.id === 'm1' && drawn === 1);
+  // Its element as a selector that outlives the @ref, for the reply to keep
+  check(
+    'a mark finds a stable selector for its element',
+    Boolean(mark.selector) &&
+      (await browser.evaluate(
+        `document.querySelector(${JSON.stringify(mark.selector)})?.id === 'confirm'`
+      )) === true
+  );
+  const again = await browser.mark(mark.selector!, 'Changed: the reschedule guard', 'change');
+  check(
+    'the selector draws it again as the same mark',
+    again.id === 'm1' &&
+      (await browser.evaluate(
+        `document.querySelectorAll('#__talkthrough_marks [data-mark]').length`
+      )) === 1
+  );
   await browser.mark('input[name=email]', 'Type the email', 'action');
   check(
     'marks are numbered and listed',

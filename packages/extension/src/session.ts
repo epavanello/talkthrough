@@ -1053,11 +1053,28 @@ export class ReviewSession implements vscode.Disposable {
     for (const part of message.sentences.flatMap((sentence) => sentence.parts)) {
       if (part.type !== 'cue' || part.cue.kind !== 'page') continue;
       try {
-        part.cue.path = resolveUrl(part.cue.path, base);
+        this.pin(message, 'page', part.cue.path, resolveUrl(part.cue.path, base));
       } catch {
         // No page open to go from: the cue stays as written
       }
     }
+  }
+
+  /**
+   * A cue of a reply made to hold on its own (a page's full address, a mark's stable selector), in
+   * its sentences and in the text a kept review parses again.
+   */
+  private pin(message: ChatMessage, kind: 'page' | 'mark', from: string, to: string) {
+    if (from === to) return;
+    for (const part of message.sentences.flatMap((sentence) => sentence.parts))
+      if (part.type === 'cue' && part.cue.kind === kind && part.cue.path === from)
+        part.cue.path = to;
+    const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    message.text = message.text.replace(
+      new RegExp(`\\[\\[(\\s*${kind}\\s+)${escaped}(?=[\\s#\\]])`, 'g'),
+      (_, lead: string) => `[[${lead}${to}`
+    );
+    this.touch();
   }
 
   private addMessage(
@@ -1564,7 +1581,27 @@ export class ReviewSession implements vscode.Disposable {
     if (cue.kind === 'page') await browser.open(cue.path);
     else {
       const { kind, label } = markOf(cue.symbol ?? '');
-      await browser.mark(cue.path, label, kind);
+      const mark = await browser.mark(cue.path, label, kind);
+      // Drawn while its @ref is good: the reply keeps a selector that a replay or a reload finds
+      if (cue.path.startsWith('@') && mark.selector) {
+        const ref = cue.path;
+        const message = [...this.state.messages]
+          .reverse()
+          .find((one) =>
+            one.sentences.some((sentence) =>
+              sentence.parts.some(
+                (part) =>
+                  part.type === 'cue' &&
+                  (part.cue === cue ||
+                    (part.cue.kind === 'mark' &&
+                      part.cue.path === ref &&
+                      part.cue.symbol === cue.symbol))
+              )
+            )
+          );
+        if (message) this.pin(message, 'mark', ref, mark.selector);
+        cue.path = mark.selector;
+      }
     }
     this.panel.show();
   }

@@ -262,6 +262,12 @@ describe('Talkthrough review session', function () {
         .some((call) => call.startsWith('open')),
       'the open page is not reloaded'
     );
+    // The reply kept the mark's selector in place of its @ref: a replay or a reload finds it
+    assert.ok(
+      lastClaude()!.text.includes('[[mark #confirm action: Clicca qui]]'),
+      lastClaude()!.text
+    );
+    assert.ok(calls().slice(before).includes('get box #confirm'), 'the replay marks by selector');
   });
 
   it("GIVEN the mic WHEN pressed twice THEN Claude's dictation sends a dictated prompt", async () => {

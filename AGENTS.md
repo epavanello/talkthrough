@@ -111,7 +111,10 @@ and webview, esbuild for the host, e2e in a real VS Code.
   document coordinates from `get box`, kept within the page's width, its label as text placed by CSS
   anchor positioning: `position-try-order: most-width`, flipping below). A mark follows the element
   under it (found by `elementFromPoint`, checked every 300 ms) and goes once it leaves the page;
-  `refresh()` drops those from the list. Numbered `m1…`, kept per page.
+  `refresh()` drops those from the list. Numbered `m1…`, kept per page. An @ref lives only until
+  the next snapshot: drawing a mark answers a selector for its element (an id, else `nth-of-type`
+  steps), and `pin()` writes it, and a page cue's full address, into the reply's text, which a kept
+  review parses again.
 - `browserPanel.ts` is a WebviewPanel in column Two (the diff is in One), mounting the same webview
   bundle (`data-view="browser"`, `BrowserApp.svelte`). agent-browser's stream (a WebSocket that only
   takes local clients) is opened by the host, which relays JPEG frames to the panel (ack pacing) and

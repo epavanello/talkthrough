@@ -18,6 +18,11 @@ export interface Mark {
   target: string;
   label: string;
   kind: MarkKind;
+  /**
+   * A CSS selector for the element, found as the mark is drawn: an @ref holds only until the next
+   * snapshot (the page changes, the browser restarts), this holds as long as the page is the same.
+   */
+  selector?: string;
 }
 
 /** The page, as the panel and Claude's context show it. */
@@ -178,7 +183,34 @@ export function markScript(
     : 'position:absolute;left:-2px;' + (m.y < 34 ? 'top:calc(100% + 4px)' : 'bottom:calc(100% + 4px)') + ';max-width:420px') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:4px;font:600 12px/1.5 system-ui,sans-serif;color:#fff;background:' + m.color + ';box-shadow:0 1px 3px #0004';
   el.appendChild(tag);
   layer.appendChild(el);
-  return true;
+  // The element as a selector that outlives the snapshot: an id, else a path of nth-of-type steps
+  // from the nearest one (no spaces: it goes back into a cue)
+  if (!target) return null;
+  const isOnly = (selector, element) => {
+    try {
+      const all = document.querySelectorAll(selector);
+      return all.length === 1 && all[0] === element;
+    } catch {
+      return false;
+    }
+  };
+  const steps = [];
+  for (let node = target; node && node.nodeType === 1; node = node.parentElement) {
+    if (node.id && /^[A-Za-z][\\w-]*$/.test(node.id) && !/^L\\d/.test(node.id) && isOnly('#' + node.id, node)) {
+      steps.unshift('#' + node.id);
+      break;
+    }
+    if (node === document.documentElement) {
+      steps.unshift('html');
+      break;
+    }
+    let index = 1;
+    for (let other = node.previousElementSibling; other; other = other.previousElementSibling)
+      if (other.localName === node.localName) index++;
+    steps.unshift(node.localName + ':nth-of-type(' + index + ')');
+  }
+  const selector = steps.join('>');
+  return /^\\S+$/.test(selector) && isOnly(selector, target) ? selector : null;
 })()`;
 }
 
@@ -405,12 +437,16 @@ export class Browser {
       'box',
       target
     ]);
-    const existing = this.marks.findIndex((one) => one.target === target);
+    // The same element again: by its @ref, or by the selector a replay has in its place
+    const existing = this.marks.findIndex(
+      (one) => one.target === target || one.selector === target
+    );
     const id = existing >= 0 ? this.marks[existing].id : `m${this.marks.length + 1}`;
     const mark: Mark = { id, target, label, kind };
     if (existing >= 0) this.marks[existing] = mark;
     else this.marks.push(mark);
-    await this.evaluate(markScript(mark, box, this.marks.indexOf(mark) + 1));
+    const selector = await this.evaluate(markScript(mark, box, this.marks.indexOf(mark) + 1));
+    if (typeof selector === 'string') mark.selector = selector;
     this.onChange();
     return mark;
   }

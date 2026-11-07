@@ -41,6 +41,7 @@ switch (`${args[0]} ${args[1] ?? ''}`.trim()) {
     answer(
       args[0] === 'snapshot'
         ? { snapshot: '- button "Confirm reschedule" [ref=e2]' }
-        : { result: true }
+        : // A mark's script answers its element's selector, as the real page does
+          { result: args[0] === 'eval' && args[1].includes('nth-of-type') ? '#confirm' : true }
     );
 }

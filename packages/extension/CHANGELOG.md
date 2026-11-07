@@ -10,6 +10,10 @@
   .env) instead of assuming one, and checks it before asking you to start the server.
 - Replaying an older reply no longer jumps to the bottom when it ends, and a new reply scrolls all the
   way into view.
+- A reply's boxes on the page come back after a reload, or after the page changed: a box remembers its
+  element by a selector, not by the browser's short-lived reference ("Unknown ref"). Its page link
+  keeps its full address in a kept review too.
+- Hovering a sentence no longer shows through its code and page links.
 
 ## 0.5.1
 
