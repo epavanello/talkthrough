@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- In Cursor and other editors that keep the secondary side bar for themselves, Talkthrough has an
+  icon of its own in the activity bar, instead of a section among the files.
+
 ## 0.5.2
 
 - Send sits in the message box, as in a chat, and Next steps back while you type: the two were easy to

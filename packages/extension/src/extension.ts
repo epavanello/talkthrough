@@ -3,7 +3,7 @@ import { reviewName, type ChangeScope, type HostApi } from '@talkthrough/shared'
 import { RevisionProvider, SCHEME } from './diff';
 import { githubRepo, searchPulls } from './github';
 import { ReviewSession, findRepo, type StartOptions } from './session';
-import { ChatView } from './view';
+import { ChatView, focusChat, hasOwnBar } from './view';
 
 /** What the e2e tests drive. */
 export interface TalkthroughApi {
@@ -39,7 +39,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
         ignoreFocusOut: true
       }));
     if (!value) return;
-    await vscode.commands.executeCommand('talkthrough.chat.focus');
+    await focusChat();
     await review.start({ kind: 'github', pr: value });
   };
 
@@ -69,7 +69,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
         )
       )?.scope;
     if (!picked) return;
-    await vscode.commands.executeCommand('talkthrough.chat.focus');
+    await focusChat();
     await review.start({ kind: 'changes', scope: picked });
   };
 
@@ -83,7 +83,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
         ignoreFocusOut: true
       }));
     if (!value?.trim()) return;
-    await vscode.commands.executeCommand('talkthrough.chat.focus');
+    await focusChat();
     await review.start({ kind: 'tour', question: value });
   };
 
@@ -192,6 +192,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       if (/^https:\/\//.test(url)) await vscode.env.openExternal(vscode.Uri.parse(url));
     }
   };
+  void vscode.commands.executeCommand('setContext', 'talkthrough.ownBar', hasOwnBar());
   const view = new ChatView(ctx.extensionUri, api, log);
 
   ctx.subscriptions.push(
@@ -199,9 +200,13 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     review,
     review.onChange(() => view.post({ event: 'state', state: review.state })),
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new RevisionProvider()),
-    vscode.window.registerWebviewViewProvider('talkthrough.chat', view, {
-      webviewOptions: { retainContextWhenHidden: true }
-    }),
+    vscode.window.registerWebviewViewProvider(
+      hasOwnBar() ? 'talkthrough.panel' : 'talkthrough.chat',
+      view,
+      {
+        webviewOptions: { retainContextWhenHidden: true }
+      }
+    ),
     vscode.commands.registerCommand('talkthrough.start', (pr?: string) =>
       start(typeof pr === 'string' ? pr : '')
     ),

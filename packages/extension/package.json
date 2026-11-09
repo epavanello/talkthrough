@@ -2,7 +2,7 @@
   "name": "talkthrough",
   "displayName": "Talkthrough — talk a PR review through with Claude",
   "description": "Review a pull request by talking it through with Claude Code: native diffs on your real files, short spoken turns, and a memory of what is clear.",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "publisher": "epavanello",
   "license": "MIT",
   "author": "Emanuele Pavanello",
@@ -46,6 +46,13 @@
           "title": "Talkthrough",
           "icon": "resources/icon.svg"
         }
+      ],
+      "activitybar": [
+        {
+          "id": "talkthrough-bar",
+          "title": "Talkthrough",
+          "icon": "resources/icon.svg"
+        }
       ]
     },
     "views": {
@@ -53,7 +60,16 @@
         {
           "type": "webview",
           "id": "talkthrough.chat",
-          "name": "Review"
+          "name": "Review",
+          "when": "!talkthrough.ownBar"
+        }
+      ],
+      "talkthrough-bar": [
+        {
+          "type": "webview",
+          "id": "talkthrough.panel",
+          "name": "Review",
+          "when": "talkthrough.ownBar"
         }
       ]
     },

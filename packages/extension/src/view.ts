@@ -48,6 +48,18 @@ export const webviewOptions = (extensionUri: vscode.Uri) => ({
   localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'dist', 'webview')]
 });
 
+/**
+ * VS Code puts the chat in the secondary side bar; editors that don't take extensions there (Cursor
+ * shows it among the files) get an activity bar icon of its own: `talkthrough.ownBar`.
+ */
+export const hasOwnBar = () => !/Visual Studio Code/i.test(vscode.env.appName);
+
+/** Shows the chat, wherever this editor has it. */
+export const focusChat = () =>
+  vscode.commands.executeCommand(
+    hasOwnBar() ? 'talkthrough.panel.focus' : 'talkthrough.chat.focus'
+  );
+
 export class ChatView implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | null = null;
 

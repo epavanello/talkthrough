@@ -59,6 +59,7 @@ import { BrowserPanel } from './browserPanel';
 import { ReviewServer, type ToolResult } from './server';
 import { Stage } from './stage';
 import { MirrorTerminal } from './terminal';
+import { focusChat } from './view';
 import {
   BROWSER_TOOLS,
   TOOLS,
@@ -365,7 +366,7 @@ export class ReviewSession implements vscode.Disposable {
     void this.checkHead();
     void this.countChanges();
     if (!isHandedHere || !saved) return;
-    void vscode.commands.executeCommand('talkthrough.chat.focus');
+    void focusChat();
     const setup = config().get<string>('worktreeSetup', '').trim();
     if (setup)
       vscode.window.createTerminal({ name: 'Talkthrough setup', cwd: repo! }).sendText(setup);
