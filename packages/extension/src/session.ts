@@ -34,7 +34,7 @@ import { ClaudeProcess, claudeArgs } from './claude';
 import { cuesOf, parseReply } from './cues';
 import { DELTA_TITLE, carryOver } from './delta';
 import { hunksAt, indexPatch, parsePatch, renderPatch, type ParsedFile } from './patch';
-import { Player, SaySpeaker } from './player';
+import { Player, SaySpeaker, ping } from './player';
 import {
   commitsOf,
   commitsSince,
@@ -297,6 +297,10 @@ export class ReviewSession implements vscode.Disposable {
   private readonly headTimer: NodeJS.Timeout;
   private readonly focus: vscode.Disposable;
   private viewed = new Set<string>();
+  /** A reply that came while the window was away, read once it is back. */
+  private unread: ChatMessage | null = null;
+  /** The voice was paused because the window lost focus. */
+  private isPausedAway = false;
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
@@ -340,7 +344,8 @@ export class ReviewSession implements vscode.Disposable {
     // New commits on the PR: looked for every few minutes, and when the window gets focus
     this.headTimer = setInterval(() => void this.checkHead(), HEAD_INTERVAL);
     this.focus = vscode.window.onDidChangeWindowState((window) => {
-      if (!window.focused) return;
+      if (!window.focused) return this.away();
+      this.back();
       if (Date.now() - this.lastHeadCheck > 30_000) void this.checkHead();
       void this.countChanges();
     });
@@ -1032,9 +1037,32 @@ export class ReviewSession implements vscode.Disposable {
     const message = this.addMessage('claude', reply);
     this.pinPages(message);
     this.explain(message);
+    // Away from the window: a ping now, the reply read once they are back
+    if (this.state.isSpeechOn && !vscode.window.state.focused) {
+      this.unread = message;
+      return ping();
+    }
     // Never talk over the person while they dictate: the cues still move the editor
     const isSilent = !this.state.isSpeechOn || this.state.isRecording;
     this.player.play(message, 0, isSilent);
+  }
+
+  /** The window lost focus: the voice pauses where it is. */
+  private away() {
+    if (!this.state.player.isPlaying) return;
+    this.isPausedAway = true;
+    this.player.pause();
+  }
+
+  /** Back in the window: the paused voice goes on, an unread reply is read. */
+  private back() {
+    const unread = this.unread;
+    this.unread = null;
+    if (unread && this.state.messages.at(-1) === unread && !this.state.isRecording)
+      this.player.play(unread, 0, !this.state.isSpeechOn);
+    else if (this.isPausedAway && this.state.isSpeechOn && !this.state.isRecording)
+      this.player.resume();
+    this.isPausedAway = false;
   }
 
   /**

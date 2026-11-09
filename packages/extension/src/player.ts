@@ -11,6 +11,12 @@ export interface Speaker {
   speak(text: string, signal: AbortSignal): Promise<void>;
 }
 
+/** A short system sound: a reply came while the window was away (macOS; elsewhere, nothing). */
+export function ping() {
+  if (process.platform !== 'darwin') return;
+  spawn('afplay', ['/System/Library/Sounds/Ping.aiff'], { stdio: 'ignore' }).on('error', () => {});
+}
+
 /** macOS `say`, the text on stdin (so nothing in it reads as an option). */
 export class SaySpeaker implements Speaker {
   constructor(private readonly options: () => { voice: string; rate: number }) {}

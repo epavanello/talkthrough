@@ -2,6 +2,8 @@
 
 ## 0.5.4
 
+- The voice pauses when VS Code loses focus and goes on when you are back; a reply that comes while
+  you are away plays a ping, and is read once you return.
 - Every file Claude mentions is a link: the one it shows opens with the voice, one it only names is a
   link you click (the voice says only its name). A path Claude writes as code anyway becomes a link
   too.
