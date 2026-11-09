@@ -4,6 +4,7 @@
  * keys go back the same way. Claude and the person use one page.
  */
 import * as vscode from 'vscode';
+import { isEditorAreaEmpty } from './stage';
 import type { BrowserApi, BrowserInput, HostEvent } from '@talkthrough/shared';
 import { QUIET, describeCommand, type Browser } from './browser';
 import { html, serve, webviewOptions } from './view';
@@ -26,12 +27,19 @@ export class BrowserPanel implements vscode.Disposable {
     return this.panel !== null;
   }
 
-  /** Shows the panel beside the code, and its live view. */
+  /** Shows the panel beside the code (alone, the whole area), and its live view; where it is, if open. */
   show(preserveFocus = true) {
-    if (this.panel) this.panel.reveal(vscode.ViewColumn.Two, preserveFocus);
+    if (this.panel)
+      this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Two, preserveFocus);
     else this.create(preserveFocus);
     void this.connect();
     this.onChange();
+  }
+
+  /** Code took the main column the panel had alone: the panel moves beside it. */
+  makeRoom() {
+    if (this.panel?.viewColumn === vscode.ViewColumn.One)
+      this.panel.reveal(vscode.ViewColumn.Two, true);
   }
 
   toggle() {
@@ -49,7 +57,10 @@ export class BrowserPanel implements vscode.Disposable {
     const panel = vscode.window.createWebviewPanel(
       'talkthrough.browser',
       'Browser',
-      { viewColumn: vscode.ViewColumn.Two, preserveFocus },
+      {
+        viewColumn: isEditorAreaEmpty() ? vscode.ViewColumn.One : vscode.ViewColumn.Two,
+        preserveFocus
+      },
       { ...webviewOptions(this.extensionUri), retainContextWhenHidden: true }
     );
     panel.webview.html = html(panel.webview, this.extensionUri, 'browser');

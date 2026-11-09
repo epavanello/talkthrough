@@ -2,6 +2,9 @@
 
 ## 0.5.5
 
+- Panels open where there is room: the browser, or a file Claude opens beside the code, takes the
+  whole area when nothing else is open, and moves aside once the code comes; an open browser stays in
+  its column instead of leaving half the screen empty.
 - While Claude works on its turn (after Next, a question), the chat shows it: a spinner where its
   reply will come, with what it is doing.
 - A background task Claude starts no longer shows up in the chat as a long message of yours, and

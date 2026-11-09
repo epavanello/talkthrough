@@ -40,13 +40,21 @@ function highlightType() {
   });
 }
 
+/** No editor is open anywhere: what opens now takes the whole area, not half of it. */
+export const isEditorAreaEmpty = () =>
+  vscode.window.tabGroups.all.every((group) => group.tabs.length === 0);
+
 export class Stage implements vscode.Disposable {
   /** The diff's highlight (column one) and the side file's (column two). */
   private readonly main = highlightType();
   private readonly side = highlightType();
   private readonly lit = new Map<vscode.TextEditorDecorationType, vscode.TextEditor>();
 
-  constructor(private readonly context: () => StageContext | null) {}
+  constructor(
+    private readonly context: () => StageContext | null,
+    /** The main column got the code: what shared it (the browser) moves beside it. */
+    private readonly onMain: () => void = () => {}
+  ) {}
 
   async run(cue: Cue) {
     const context = this.context();
@@ -64,16 +72,20 @@ export class Stage implements vscode.Disposable {
     );
     if (!file) return this.open(context, cue, vscode.ViewColumn.One);
     const editor = await openPrDiff(context.pr, file);
+    this.onMain();
     if (editor) this.highlight(this.main, editor, cue.start, cue.end);
   }
 
-  private async open(context: StageContext, cue: Cue, column = vscode.ViewColumn.Two) {
+  private async open(context: StageContext, cue: Cue, wanted = vscode.ViewColumn.Two) {
+    // Beside the code; alone, the whole area
+    const column = isEditorAreaEmpty() ? vscode.ViewColumn.One : wanted;
     const uri = await headUri(context.pr, cue.path);
     const editor = await vscode.window.showTextDocument(uri, {
       viewColumn: column,
       preserveFocus: true,
       preview: true
     });
+    if (column === vscode.ViewColumn.One) this.onMain();
     this.highlight(
       column === vscode.ViewColumn.One ? this.main : this.side,
       editor,

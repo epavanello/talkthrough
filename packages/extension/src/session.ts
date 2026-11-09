@@ -333,8 +333,9 @@ export class ReviewSession implements vscode.Disposable {
         this.changed();
       }
     );
-    this.stage = new Stage(() =>
-      this.loaded ? { pr: this.loaded.info, files: this.state.files } : null
+    this.stage = new Stage(
+      () => (this.loaded ? { pr: this.loaded.info, files: this.state.files } : null),
+      () => this.panel.makeRoom()
     );
     this.mirror = new MirrorTerminal(() => {
       this.state.isTerminalShown = this.mirror.isShown;
