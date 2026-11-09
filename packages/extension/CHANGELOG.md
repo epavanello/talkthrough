@@ -2,6 +2,8 @@
 
 ## 0.5.5
 
+- Files at the repository's root (`Dockerfile`, `.env.example`, `playwright.config.ts`) are links
+  too when Claude names them.
 - The chat stays scrolled to the bottom when a dictation is sent and Claude starts working: the box
   below changing height no longer leaves the last message and the spinner out of sight.
 - Claude ends a turn with up to three replies you can click ("Show the R2 adapter") instead of a

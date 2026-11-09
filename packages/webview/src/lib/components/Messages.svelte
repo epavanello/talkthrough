@@ -52,17 +52,34 @@
     }
   } as const;
 
+  const SEGMENT = /^[\w@.+[\]()-]+$/;
+  /** Extensions of code and config: a root file (`vite.config.ts`) without a folder in front. */
+  const EXTENSION =
+    /\.(ts|tsx|js|jsx|mjs|cjs|svelte|vue|astro|json|jsonc|md|mdx|ya?ml|toml|ini|env|example|sample|css|scss|html|sql|prisma|py|go|rs|rb|java|kt|swift|php|cs|sh|lock|txt|graphql|proto)$/i;
+  const NAMED =
+    /^(Dockerfile|Containerfile|Makefile|Procfile|Gemfile|Rakefile|Justfile|LICENSE|README)(\.[\w-]+)?$/;
+  const DOTFILE =
+    /^\.(env|gitignore|gitattributes|dockerignore|npmrc|nvmrc|editorconfig|prettierrc|eslintrc|prettierignore)([\w.-]*)$/;
+
+  /** A repository path: folders and a file, or a file at the root that can only be one. */
+  const isFilePath = (path: string) => {
+    const segments = path.split('/');
+    if (!segments.every((segment) => SEGMENT.test(segment))) return false;
+    const name = segments.at(-1)!;
+    if (segments.length > 1) return /\.[A-Za-z0-9]{1,8}$/.test(name) || NAMED.test(name);
+    return EXTENSION.test(name) || NAMED.test(name) || DOTFILE.test(name);
+  };
+
   /**
    * A repository path written as code (`src/a.ts`, `src/a.ts:40`) rather than as a cue: still a link
    * that opens it.
    */
   const fileOf = (code: string): Cue | null => {
-    const match = code.match(
-      /^([\w@.+[\]()-]+(?:\/[\w@.+[\]()-]+)+\.[A-Za-z0-9]{1,8})(?::(\d+))?$/
-    );
-    if (!match) return null;
-    const start = match[2] ? Number(match[2]) : null;
-    return { kind: 'open', path: match[1].replace(/^\.?\//, ''), start, end: start, symbol: null };
+    const match = code.match(/^(.+?)(?::(\d+))?$/);
+    const path = match?.[1].replace(/^\.?\//, '') ?? '';
+    if (!isFilePath(path)) return null;
+    const start = match?.[2] ? Number(match[2]) : null;
+    return { kind: 'open', path, start, end: start, symbol: null };
   };
 
   /** The replies a message offers to click, as its choice cues say them. */
