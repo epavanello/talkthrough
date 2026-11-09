@@ -16,6 +16,7 @@ import {
   describeCommand,
   markOf,
   markScript,
+  probe,
   resolveUrl
 } from '../src/browser';
 
@@ -43,6 +44,24 @@ describe('resolveUrl', () => {
     expect(resolveUrl('localhost:5173/x', null)).toBe('http://localhost:5173/x');
     expect(resolveUrl('https://staging.example.com/a', null)).toBe('https://staging.example.com/a');
     expect(() => resolveUrl('/events', null)).toThrow('Not a full URL');
+  });
+});
+
+describe('probe', () => {
+  it('GIVEN candidate addresses WHEN probed THEN the local one that answers says so, others are not tried', async () => {
+    const { createServer } = await import('node:http');
+    const server = createServer((_, res) => res.writeHead(200).end('ok'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+
+    const text = await probe([`127.0.0.1:${port}`, 'http://127.0.0.1:9', 'https://example.com']);
+    server.close();
+
+    expect(text.split('\n')).toEqual([
+      `http://127.0.0.1:${port}/: answers, HTTP 200`,
+      'http://127.0.0.1:9/: nothing answers',
+      'https://example.com/: not a local address, not tried'
+    ]);
   });
 });
 

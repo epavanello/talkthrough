@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.4
+
+- Every file Claude mentions is a link: the one it shows opens with the voice, one it only names is a
+  link you click (the voice says only its name). A path Claude writes as code anyway becomes a link
+  too.
+- Claude finds the app's address on its own and checks it before opening the browser (a new probe of
+  local addresses); it asks you only when nothing answers, saying which command and port it found.
+
 ## 0.5.3
 
 - In Cursor and other editors that keep the secondary side bar for themselves, Talkthrough has an

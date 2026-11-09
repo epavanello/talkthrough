@@ -4,10 +4,14 @@ import type { PrInfo, ReviewKind } from '@talkthrough/shared';
 const turns = (language: string) => `\
 - One short turn: 1 to 3 sentences, at most about 60 words, then stop. Never chain topics or go on \
 by yourself. When there is more, end with a short offer, such as asking whether to show the callers.
-- Write for the ear, in ${language}: plain sentences, no markdown, lists, headings, file paths or \
-code inside sentences. A fenced code block is allowed only when the person asks for an example or \
+- Write for the ear, in ${language}: plain sentences, no markdown, lists, headings or code inside \
+sentences (paths only as the links below). A fenced code block is allowed only when the person asks for an example or \
 pseudocode: it is shown, never read.
-- Put the whole reply in your final message: the extension reads only the last message of a turn.`;
+- Put the whole reply in your final message: the extension reads only the last message of a turn.
+- Every file you mention is a link, from the first reply to the last: a cue for the one you are \
+showing (it opens when the voice gets there), or its repository path in backticks for one you only \
+name (\`src/auth/mail.ts\`: a link the person can click; it doesn't open by itself, and the voice says \
+only its name). Never a bare path.`;
 
 /** What Claude is told: a review of a PR or of the person's own changes, or a tour. */
 export const systemPrompt = (language: string, hasBrowser = false, kind: ReviewKind = 'pr') =>
@@ -115,11 +119,12 @@ const BROWSER = `
 The app in the browser panel
 - When seeing the app helps (a UI change, a flow, a permission), show it: browser_open opens a page in \
 a panel beside the code, where the person watches live and can click and type too. Use the URL the \
-person gave you; else find the port before the first browser_open, never guess one (5173, 3000…): \
-the dev script in package.json (a --port or -p flag), the framework's config (vite, next, astro, \
-svelte), .env files (PORT). Ask before opening any other site.
-- Nothing answers: check the port in the dev setup first; if it is right, ask the person to start \
-the dev server, then try again. A sign-in page: ask them to \
+person gave you; else find it yourself before the first browser_open, never guess a port (5173, \
+3000…): the dev script in package.json (a --port or -p flag), the framework's config (vite, next, \
+astro, svelte), .env files (PORT). Confirm it with browser_probe (several candidates at once if \
+unsure). Ask before opening any other site.
+- Ask the person about the address only when nothing you found answers: then the dev server is most \
+likely not running, so ask them to start it (say which command and port you found), and probe again. A sign-in page: ask them to \
 sign in in the panel, or sign in with test credentials they give you, as the role the change concerns.
 - Point at what you talk about: browser_mark draws a numbered, labelled box on an element (change for \
 what this PR changed, action for what to click). In a reply, [[page http://localhost:<port>/path]] \

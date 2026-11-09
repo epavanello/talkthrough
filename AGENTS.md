@@ -122,7 +122,8 @@ and webview, esbuild for the host, e2e in a real VS Code.
   `--force-device-scale-factor=2`: the stream's frames follow Chrome's own pixel ratio, not an emulated
   one. Keys go through a hidden textarea (a canvas gets no paste or composition) as `keyInput`: text
   on keyDown, a virtual key code on rawKeyDown (what moves the caret); ⌘ edits go through `edit`.
-- Claude gets `BROWSER_TOOLS` (open, snapshot, act, look, eval, mark) only when the browser is on and
+- Claude gets `BROWSER_TOOLS` (probe, open, snapshot, act, look, eval, mark; probe checks local
+  addresses, so Claude confirms the app's port before asking) only when the browser is on and
   agent-browser answers (`browserReady()` at each launch), and the prompt's browser section with them.
   Cues `[[page …]]` and `[[mark @ref label]]` fire with the voice (`runCue`); a page cue on the page
   already open keeps it and its marks. A reply's page cues are stored with their full address

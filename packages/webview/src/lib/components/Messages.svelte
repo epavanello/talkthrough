@@ -49,6 +49,19 @@
     }
   } as const;
 
+  /**
+   * A repository path written as code (`src/a.ts`, `src/a.ts:40`) rather than as a cue: still a link
+   * that opens it.
+   */
+  const fileOf = (code: string): Cue | null => {
+    const match = code.match(
+      /^([\w@.+[\]()-]+(?:\/[\w@.+[\]()-]+)+\.[A-Za-z0-9]{1,8})(?::(\d+))?$/
+    );
+    if (!match) return null;
+    const start = match[2] ? Number(match[2]) : null;
+    return { kind: 'open', path: match[1].replace(/^\.?\//, ''), start, end: start, symbol: null };
+  };
+
   /** Next, pressed or said: an action more than a message. */
   const isNext = (message: ChatMessage) => message.text.trim() === 'Next';
 
@@ -91,7 +104,7 @@
 
 <!-- Kept on one line: whitespace between these tags would show as extra spaces in the sentence -->
 <!-- prettier-ignore -->
-{#snippet inline(text: string)}{#each text.split(/(`[^`]+`)/g) as piece, at (at)}{#if piece.length > 2 && piece.startsWith('`') && piece.endsWith('`')}<code class="rounded bg-muted px-1 font-mono text-[0.9em]">{piece.slice(1, -1)}</code>{:else}{piece.replace(/\*\*|__/g, '')}{/if}{/each}{/snippet}
+{#snippet inline(text: string)}{#each text.split(/(`[^`]+`)/g) as piece, at (at)}{#if piece.length > 2 && piece.startsWith('`') && piece.endsWith('`')}{@const file = fileOf(piece.slice(1, -1))}{#if file}{@render chip(file)}{:else}<code class="rounded bg-muted px-1 font-mono text-[0.9em]">{piece.slice(1, -1)}</code>{/if}{:else}{piece.replace(/\*\*|__/g, '')}{/if}{/each}{/snippet}
 
 <!-- prettier-ignore -->
 {#snippet parts(sentence: Sentence)}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue'}{@render chip(part.cue)}{/if}{/each}{/snippet}

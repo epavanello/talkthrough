@@ -91,6 +91,32 @@ export const QUIET = new Set([
   'launch'
 ]);
 
+/** Which local addresses answer: their HTTP status, or nothing. Other hosts are not tried. */
+export async function probe(urls: string[]) {
+  const lines = await Promise.all(
+    urls.slice(0, 10).map(async (raw) => {
+      let url: URL;
+      try {
+        url = new URL(resolveUrl(raw, null));
+      } catch {
+        return `${raw}: not a URL`;
+      }
+      if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname))
+        return `${url.href}: not a local address, not tried`;
+      try {
+        const response = await fetch(url, {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(3000)
+        });
+        return `${url.href}: answers, HTTP ${response.status}`;
+      } catch {
+        return `${url.href}: nothing answers`;
+      }
+    })
+  );
+  return lines.join('\n');
+}
+
 /** A relative URL (`/events/42`) on the current page's origin; absolute ones as they are. */
 export function resolveUrl(url: string, current: string | null) {
   const value = url.trim();

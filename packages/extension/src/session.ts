@@ -54,7 +54,7 @@ import { git, run } from './proc';
 import { NEXT, kickoff, systemPrompt, updatePrompt } from './prompts';
 import { checkRequirements } from './requirements';
 import { ReviewStore } from './reviews';
-import { Browser, browserBin, markOf, resolveUrl, type MarkKind } from './browser';
+import { Browser, browserBin, markOf, probe, resolveUrl, type MarkKind } from './browser';
 import { BrowserPanel } from './browserPanel';
 import { ReviewServer, type ToolResult } from './server';
 import { Stage } from './stage';
@@ -1701,6 +1701,8 @@ export class ReviewSession implements vscode.Disposable {
       return `${page?.title || 'untitled'} at ${page?.url ?? 'no page'}\n\n${await browser.snapshot()}`;
     };
     switch (name) {
+      case 'browser_probe':
+        return { text: await probe(Array.isArray(args.urls) ? args.urls.map(String) : []) };
       case 'browser_open':
         await browser.open(String(args.url ?? ''));
         this.panel.show();

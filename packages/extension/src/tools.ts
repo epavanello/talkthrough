@@ -186,6 +186,12 @@ const choice = (values: string[], description: string) => ({
 /** The browser panel's tools, listed when agent-browser is there (`talkthrough.browser.enabled`). */
 export const BROWSER_TOOLS: ToolSpec[] = [
   {
+    name: 'browser_probe',
+    description:
+      "Checks which local addresses answer (localhost, 127.0.0.1), without opening anything: each one's HTTP status, or that nothing answers. Use it to confirm the app's port before browser_open.",
+    inputSchema: object({ urls: strings('Such as http://localhost:1234, at most 10') }, ['urls'])
+  },
+  {
     name: 'browser_open',
     description:
       "Opens a page of the app in the browser panel beside the code: the person watches it live, and can click and type in it too. A full URL, or a path on the current page's origin. Answers its title, URL and interactive elements with refs.",
