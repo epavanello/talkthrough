@@ -116,20 +116,31 @@
     toBottom();
   });
 
-  // At the bottom, the chat stays there when its height changes
+  // At the bottom, the chat stays there whatever changes: its height (the composer below), or what
+  // it holds (a message, the spinner, its words). Scrolled up to read, it is left alone.
   let isAtBottom = true;
   $effect(() => {
     if (!list) return;
     const element = list;
+    let frame = 0;
+    const stick = () => {
+      if (!isAtBottom || frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        element.scrollTop = element.scrollHeight;
+      });
+    };
     const onScroll = () =>
       (isAtBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 24);
-    const observer = new ResizeObserver(() => {
-      if (isAtBottom) element.scrollTop = element.scrollHeight;
-    });
-    observer.observe(element);
+    const resized = new ResizeObserver(stick);
+    const changed = new MutationObserver(stick);
+    resized.observe(element);
+    changed.observe(element, { childList: true, subtree: true, characterData: true });
     element.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      observer.disconnect();
+      cancelAnimationFrame(frame);
+      resized.disconnect();
+      changed.disconnect();
       element.removeEventListener('scroll', onScroll);
     };
   });
