@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { searchAt } from '../src/pr';
+import { logAt, searchAt, showAt } from '../src/pr';
 
 describe('searchAt', () => {
   const repo = mkdtempSync(path.join(tmpdir(), 'talkthrough-search-'));
@@ -51,5 +51,12 @@ describe('searchAt', () => {
       "orders.ts:1:import { resolvePrice } from './price';\n… 1 more: narrow the pattern or the paths."
     );
     expect(await searchAt(repo, head, 'nowhere')).toBe('No match.');
+  });
+
+  it('GIVEN the history WHEN read THEN commits come as hash, date, author and subject; options are refused', async () => {
+    expect(await logAt(repo, head)).toMatch(/^[0-9a-f]{7,} \d{4}-\d{2}-\d{2} t: head$/);
+    expect(await showAt(repo, head, ['price.ts'])).toContain('Math.ceil');
+    expect(await logAt(repo, '--output=/tmp/x')).toBe('Not a revision: --output=/tmp/x');
+    expect(await showAt(repo, '-O/bin/sh')).toBe('Not a revision: -O/bin/sh');
   });
 });

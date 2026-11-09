@@ -57,6 +57,29 @@ const REFERENCES: ToolSpec = {
   )
 };
 
+/** The repository's history, read-only: how the work grew, commit by commit. */
+const HISTORY: ToolSpec[] = [
+  {
+    name: 'git_log',
+    description:
+      'The commit history, newest first: short hash, date, author and subject. From the head under review unless rev is given; by paths when given.',
+    inputSchema: object({
+      rev: string('A hash, branch or HEAD~3; the head under review when omitted'),
+      paths: strings('Repository-relative files or folders'),
+      max: integer('Commits at most, 50 when omitted, 200 at most')
+    })
+  },
+  {
+    name: 'git_show',
+    description:
+      'One commit: its full message, the files it touched, and its diff (cut when long: pass paths).',
+    inputSchema: object(
+      { rev: string('A hash, branch or HEAD~3'), paths: strings('Only these files') },
+      ['rev']
+    )
+  }
+];
+
 export const TOOLS: ToolSpec[] = [
   {
     name: 'pr_overview',
@@ -104,6 +127,7 @@ export const TOOLS: ToolSpec[] = [
     )
   },
   REFERENCES,
+  ...HISTORY,
   {
     name: 'mark_ok',
     description: 'Marks hunks as ok: the person said they are clear. Only after they said so.',
@@ -164,6 +188,7 @@ export const TOUR_TOOLS: ToolSpec[] = [
     )
   },
   REFERENCES,
+  ...HISTORY,
   {
     name: 'mark_ok',
     description: 'Marks stops as ok: the person said they are clear. Only after they said so.',

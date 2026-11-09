@@ -6,6 +6,8 @@
   import { cn } from '$lib/utils';
 
   let list = $state<HTMLDivElement | null>(null);
+  /** Auto messages shown whole, by id. */
+  let expanded = $state(new Set<string>());
 
   const ICONS = { show: '◆', open: '↗', refs: '⇄', page: '◎', mark: '▣' } as const;
   /** Steps of the preparation shown at once; the older ones fold into a count. */
@@ -129,7 +131,18 @@
     {#if message.role === 'note'}
       {@render aside(Info, message.text)}
     {:else if message.isAuto}
-      {@render aside(ArrowRight, message.text)}
+      <!-- The kickoff can carry a long question: one line, the rest on click -->
+      <button
+        class={cn(
+          'my-2 flex w-full items-start gap-1.5 text-left text-xs text-muted-foreground',
+          !expanded.has(message.id) && '[&>span]:truncate'
+        )}
+        title={expanded.has(message.id) ? undefined : 'Show it all'}
+        onclick={() => (expanded = new Set([...expanded, message.id]))}
+      >
+        <ArrowRight class="mt-px size-3 shrink-0" />
+        <span class="min-w-0 [overflow-wrap:anywhere]">{message.text}</span>
+      </button>
     {:else if message.role === 'user' && isNext(message)}
       {@render aside(ArrowRight, 'You: Next')}
     {:else}

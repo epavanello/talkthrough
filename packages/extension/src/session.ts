@@ -42,11 +42,13 @@ import {
   fileAt,
   isAtCommit,
   loadLocal,
+  logAt,
   loadPr,
   markViewed,
   parsePrRef,
   prDiff,
   searchAt,
+  showAt,
   type LoadedPr,
   type PrRef
 } from './pr';
@@ -126,6 +128,9 @@ const language = () =>
     ?.toLowerCase() ||
   'english';
 
+/** Prompts Claude Code sends itself (a background task's result), not the person's words. */
+const INJECTED = /^\s*<(task-notification|system-reminder|local-command)/;
+
 /** How long Claude may take to take the first prompt before it is assumed to be asking something. */
 const START_TIMEOUT = 25_000;
 /** Waits before resuming again: Claude's session may still be closing in another window. */
@@ -158,6 +163,8 @@ const TOOL_LABELS: Record<string, (input: Record<string, unknown>) => string> = 
     `Searching “${String(input.pattern ?? '').slice(0, 40)}”`,
   mcp__talkthrough__set_map: () => 'Drawing the map',
   mcp__talkthrough__set_tour: () => 'Drawing the tour',
+  mcp__talkthrough__git_log: () => 'Reading the history',
+  mcp__talkthrough__git_show: (input) => `Reading commit ${String(input.rev ?? '').slice(0, 10)}`,
   mcp__talkthrough__find_references: (input) =>
     `Looking for the references of ${input.symbol ?? 'a symbol'}`,
   mcp__talkthrough__mark_ok: () => 'Marking hunks as ok',
@@ -1006,6 +1013,16 @@ export class ReviewSession implements vscode.Disposable {
   }
 
   private onPrompt(prompt: string) {
+    // Claude Code's own news (a background task Claude started has finished) comes in as a prompt:
+    // not the person's words
+    if (INJECTED.test(prompt)) {
+      this.player.stop();
+      this.setStatus('thinking', null);
+      this.track('Reading what its background work found');
+      return {
+        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: this.context() }
+      };
+    }
     const isDictated = this.isAwaitingDictation || this.state.isRecording;
     const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
     const isAuto = this.autoPrompt !== null && flat(prompt) === flat(this.autoPrompt);
@@ -1225,6 +1242,24 @@ export class ReviewSession implements vscode.Disposable {
     switch (name) {
       case 'pr_overview':
         return { text: await this.overview() };
+      case 'git_log':
+      case 'git_show': {
+        const { repo, headSha, kind } = this.loaded.info;
+        // A snapshot of your changes is no commit of yours: history starts at HEAD
+        const rev =
+          typeof args.rev === 'string' && args.rev
+            ? args.rev
+            : kind === 'pr' || !kind
+              ? headSha
+              : 'HEAD';
+        const paths = Array.isArray(args.paths) ? args.paths.map(String) : [];
+        return {
+          text:
+            name === 'git_log'
+              ? await logAt(repo, rev, { paths, max: Number(args.max) || undefined })
+              : await showAt(repo, rev, paths)
+        };
+      }
       case 'pr_search':
       case 'code_search':
         return {

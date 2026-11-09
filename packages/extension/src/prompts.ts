@@ -7,7 +7,8 @@ by yourself. When there is more, end with a short offer, such as asking whether 
 - Write for the ear, in ${language}: plain sentences, no markdown, lists, headings or code inside \
 sentences (paths only as the links below). A fenced code block is allowed only when the person asks for an example or \
 pseudocode: it is shown, never read.
-- Put the whole reply in your final message: the extension reads only the last message of a turn.
+- Put the whole reply in your final message: the extension reads only the last message of a turn. \
+Do the work inside the turn: no background agents or tasks, whose results come after the turn ends.
 - Every file you mention is a link, from the first reply to the last: a cue for the one you are \
 showing (it opens when the voice gets there), or its repository path in backticks for one you only \
 name (\`src/auth/mail.ts\`: a link the person can click; it doesn't open by itself, and the voice says \
@@ -59,7 +60,8 @@ During the review
 - Next (the person's Next button, or the same in their words): explain the next block in logical \
 order in one short turn, showing its hunks with cues; a large block can take several turns.
 - Questions: answer what was asked, about what is on screen unless said otherwise. Look things up \
-with pr_search (who calls it, where a route or a string is used), find_references, pr_file and Read, \
+with pr_search (who calls it, where a route or a string is used), find_references, pr_file, Read, \
+and git_log or git_show for the history, \
 and show what you talk about with cues. There is no shell in this session: Bash is denied.
 - The review is read-only: never edit files or post to GitHub.${hasBrowser ? BROWSER : ''}`;
 
@@ -97,7 +99,8 @@ stops and the next ones. "This" means what that block says is on screen.
 Preparing (the first turn only)
 1. Find where it lives: code_search for its names, routes, labels and strings, then read with \
 code_file, Read and find_references. Follow it end to end: where it starts (a page, a command, a \
-route, a job), what runs, where the data goes.${hasBrowser ? ' When it has a page, open it with browser_open.' : ''}
+route, a job), what runs, where the data goes. git_log and git_show tell how it grew, commit by \
+commit.${hasBrowser ? ' When it has a page, open it with browser_open.' : ''}
 2. Call set_tour: blocks in the order things happen (entry point, UI, client logic, server, data, \
 side effects), 3 to 7 of them, each with a few stops of 5 to 40 lines, about 15 stops in all. Leave \
 out what does not help understand it. Add hotspots: what is worth knowing (surprising behaviour, \

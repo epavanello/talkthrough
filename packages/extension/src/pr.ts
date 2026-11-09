@@ -291,3 +291,59 @@ export async function markViewed(at: RepoRef, prId: string, paths: string[], isV
     ...Object.fromEntries(paths.map((path, index) => [`p${index}`, path]))
   });
 }
+
+/** A revision Claude names: a hash, a branch, HEAD~3; never an option. */
+const isRev = (rev: string) => /^[\w./^~@{}-]+$/.test(rev) && !rev.startsWith('-');
+
+/** The history at `rev`, newest first: hash, date, author, subject; by paths when given. */
+export async function logAt(
+  repo: string,
+  rev: string,
+  options: { paths?: string[]; max?: number } = {}
+) {
+  if (!isRev(rev)) return `Not a revision: ${rev}`;
+  const max = Math.min(Math.max(options.max ?? 50, 1), 200);
+  const result = await run(
+    'git',
+    [
+      'log',
+      '--no-color',
+      '--date=short',
+      '--format=%h %ad %an: %s',
+      '-n',
+      String(max),
+      rev,
+      '--',
+      ...(options.paths ?? [])
+    ],
+    { cwd: repo, allowFailure: true }
+  );
+  if (result.code) return result.stderr.trim() || 'git log failed';
+  return result.stdout.trim() || 'No commits.';
+}
+
+/** One commit: its message, the files it touched, and its diff (cut when long). */
+export async function showAt(repo: string, rev: string, paths: string[] = [], max = 30_000) {
+  if (!isRev(rev)) return `Not a revision: ${rev}`;
+  const result = await run(
+    'git',
+    [
+      'show',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--stat',
+      '--patch',
+      '--format=%H%n%an, %ad%n%n%B',
+      rev,
+      '--',
+      ...paths
+    ],
+    { cwd: repo, allowFailure: true }
+  );
+  if (result.code) return result.stderr.trim() || 'git show failed';
+  const text = result.stdout;
+  return text.length > max
+    ? `${text.slice(0, max)}\n… cut at ${max} characters: ask by paths.`
+    : text;
+}

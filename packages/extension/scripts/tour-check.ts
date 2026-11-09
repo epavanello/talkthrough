@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { loadTour } from '../src/changes';
 import { ClaudeProcess, claudeArgs } from '../src/claude';
-import { fileAt, searchAt } from '../src/pr';
+import { fileAt, logAt, searchAt, showAt } from '../src/pr';
 import { kickoff, systemPrompt } from '../src/prompts';
 import { ReviewServer } from '../src/server';
 import { TOUR_TOOLS, tourMap, type TourInput } from '../src/tools';
@@ -49,6 +49,11 @@ const server = new ReviewServer({
           ignoreCase: args.ignoreCase === true
         })
       };
+    if (name === 'git_log')
+      return {
+        text: await logAt(repo, String(args.rev || 'HEAD'), { max: Number(args.max) || undefined })
+      };
+    if (name === 'git_show') return { text: await showAt(repo, String(args.rev ?? '')) };
     if (name === 'code_file') {
       const text = await fileAt(repo, headSha, String(args.path ?? ''));
       if (!text) return { text: `${String(args.path)} does not exist here.`, isError: true };

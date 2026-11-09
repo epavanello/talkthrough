@@ -92,6 +92,8 @@ and webview, esbuild for the host, e2e in a real VS Code.
   reviews: staged or uncommitted against HEAD, or the branch against `origin/HEAD`, main or master; one
   kept per scope (`#changes#<scope>`), and `checkHead()` compares snapshots. `PrInfo.kind` says which
   (`kindOf()`: missing is `pr`); worktree and checkout offers are for PRs only.
+- Both kinds, and PRs, have `git_log` and `git_show` (`logAt`, `showAt` in `pr.ts`: a revision that
+  can't be an option, `--no-ext-diff --no-textconv`, no shell).
 - A tour (`#tour#<time>`) has no diff: Claude gets `TOUR_TOOLS` (`code_search`, `code_file`,
   `set_tour`) and `systemPrompt(…, 'tour')`. `set_tour` stops become hunks `T1…` (`tourMap()` in
   `tools.ts`: the title is the header, no additions), in files, in blocks, so coverage, Next and the

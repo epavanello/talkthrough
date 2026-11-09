@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.5
+
+- A background task Claude starts no longer shows up in the chat as a long message of yours, and
+  Claude is told to do its work inside the turn instead.
+- The opening question of a tour (or the kickoff of a review) takes one line; click it to read it
+  all.
+- Claude reads the repository's history (the log, and any commit with its diff), read-only: a tour or
+  a review can tell how the work grew.
+
 ## 0.5.4
 
 - The voice pauses when VS Code loses focus and goes on when you are back; a reply that comes while
