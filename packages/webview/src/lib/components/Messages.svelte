@@ -198,6 +198,17 @@
     {/if}
   {/each}
 
+  {#if app.state.status === 'thinking' && !app.isPreparing}
+    <!-- Claude is on its turn: the reply comes here -->
+    <div class="my-3 border-l-2 border-explained pl-2.5" role="status" aria-live="polite">
+      <p class="mb-0.5 text-[11px] font-semibold tracking-wide text-explained uppercase">Claude</p>
+      <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <LoaderCircle class="size-3.5 shrink-0 animate-spin text-explained" />
+        <span class="min-w-0 truncate">{app.state.activity ?? 'Thinking'}…</span>
+      </p>
+    </div>
+  {/if}
+
   {#if app.isPreparing}
     <section class="my-3 rounded border p-3" aria-labelledby="preparing-title">
       <h2 id="preparing-title" class="flex items-center gap-2 font-semibold">

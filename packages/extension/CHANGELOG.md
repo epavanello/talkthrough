@@ -2,6 +2,8 @@
 
 ## 0.5.5
 
+- While Claude works on its turn (after Next, a question), the chat shows it: a spinner where its
+  reply will come, with what it is doing.
 - A background task Claude starts no longer shows up in the chat as a long message of yours, and
   Claude is told to do its work inside the turn instead.
 - The opening question of a tour (or the kickoff of a review) takes one line; click it to read it

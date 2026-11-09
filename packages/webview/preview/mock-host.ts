@@ -2,7 +2,7 @@
  * Stands in for the extension host so the chat runs in a plain browser
  * (`pnpm --filter @talkthrough/webview dev:browser`): RPC calls are logged, and `?scene=` picks
  * what to show — `home`, `setup` (requirements missing), `preparing`, `review` (default), `update`,
- * `browser` (the browser panel), `trust`, `recording` (dictation), `tour`,
+ * `browser` (the browser panel), `trust`, `recording` (dictation), `tour`, `thinking`,
  * `error` — with `&theme=light` for a light theme, `&width=280` for a narrow side bar and
  * `&voice=off` for the voice turned off.
  */
@@ -350,6 +350,7 @@ const SCENES: Record<string, Partial<ReviewState>> = {
       }
     ]
   },
+  thinking: { ...review, status: 'thinking', activity: 'Searching “getThread”' },
   recording: {
     ...review,
     status: 'recording',
