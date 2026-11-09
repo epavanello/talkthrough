@@ -1,4 +1,4 @@
-import type { Sentence } from '@talkthrough/shared';
+import { choiceText, type Sentence } from '@talkthrough/shared';
 import { describe, expect, it } from 'vitest';
 import { cuesOf, parseReply, speakable } from '../src/cues';
 
@@ -89,6 +89,17 @@ describe('browser cues', () => {
       { kind: 'page', path: '/events/42?tab=slots', start: null, end: null, symbol: null },
       { kind: 'mark', path: '@e3', start: null, end: null, symbol: 'action: Clicca qui' }
     ]);
+  });
+});
+
+describe('choice cues', () => {
+  it('GIVEN choices at the end of a reply WHEN parsed THEN they are cues, and the voice skips them', () => {
+    const reply = 'Lo upload è il pezzo migliore. [[choice Mostrami R2]] [[choice Chi lo chiama?]]';
+    expect(cuesOf(parseReply(reply)).map((cue) => choiceText(cue))).toEqual([
+      'Mostrami R2',
+      'Chi lo chiama?'
+    ]);
+    expect(speakable(reply)).toBe('Lo upload è il pezzo migliore.');
   });
 });
 

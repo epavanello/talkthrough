@@ -11,7 +11,7 @@ import type { Cue, CueKind, Part, Sentence } from '@talkthrough/shared';
  * of the path, not the cue's end.
  */
 const CUE =
-  /\[\[\s*(show|open|refs|page|mark)\s+(\S+?)(?:#L(\d+)(?:-L?(\d+))?)?(?:\s+([^\]\n]*?))?\s*\]\](?![/\]])/g;
+  /\[\[\s*(show|open|refs|page|mark|choice)\s+(\S+?)(?:#L(\d+)(?:-L?(\d+))?)?(?:\s+([^\]\n]*?))?\s*\]\](?![/\]])/g;
 const FENCE = /```([\w+-]*)[^\n]*\n([\s\S]*?)```/g;
 /** A sentence ends at . ! ? … (also before a closing quote or parenthesis), or at a line break. */
 const BOUNDARY = /([.!?…]+["'”’)\]]*)(\s+)|(\n+)/g;
@@ -29,7 +29,7 @@ export function parseCue(
   return {
     kind: kind as CueKind,
     // A repository path loses its ./ or /; a page's URL or a mark's target stays as written
-    path: kind === 'page' || kind === 'mark' ? path : path.replace(/^\.?\//, ''),
+    path: ['page', 'mark', 'choice'].includes(kind) ? path : path.replace(/^\.?\//, ''),
     start: first,
     end: end ? Number(end) : first,
     symbol: symbol?.trim() || null
@@ -118,7 +118,7 @@ export const cuesOf = (sentences: Sentence[]) =>
 /** Words as the voice should say them: no markdown, links, paths or bullets. */
 export function speakable(text: string) {
   return text
-    .replace(/\[\[\s*(?:show|open|refs|page|mark)\s[^\n]*?\]\](?![/\]])/g, '')
+    .replace(/\[\[\s*(?:show|open|refs|page|mark|choice)\s[^\n]*?\]\](?![/\]])/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/`([^`]*)`/g, (_, code: string) => code.replace(/^.*\//, ''))
     .replace(/(\*\*|__|\*|_|~~)(\S[\s\S]*?\S|\S)\1/g, '$2')

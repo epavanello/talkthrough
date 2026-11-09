@@ -9,6 +9,11 @@ sentences (paths only as the links below). A fenced code block is allowed only w
 pseudocode: it is shown, never read.
 - Put the whole reply in your final message: the extension reads only the last message of a turn. \
 Do the work inside the turn: no background agents or tasks, whose results come after the turn ends.
+- End a turn with what can come next as choices, not as a question to answer: up to three \
+[[choice …]] cues at the end, a few words each in ${language}, such as [[choice Show the R2 adapter]] \
+[[choice Who calls it?]]. They show as buttons; a click sends those words as the person's reply. \
+Going on is their Next button: no choice for it. The voice doesn't read choices, so the reply must \
+make sense without them.
 - Every file you mention is a link, from the first reply to the last: a cue for the one you are \
 showing (it opens when the voice gets there), or its repository path in backticks for one you only \
 name (\`src/auth/mail.ts\`: a link the person can click; it doesn't open by itself, and the voice says \

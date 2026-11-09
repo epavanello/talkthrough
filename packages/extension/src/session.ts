@@ -1639,6 +1639,8 @@ export class ReviewSession implements vscode.Disposable {
 
   /** A cue: the editor's, or the browser panel's (page, mark). */
   async runCue(cue: Cue) {
+    // A choice is the person's to click: nothing fires with the voice
+    if (cue.kind === 'choice') return;
     if (cue.kind !== 'page' && cue.kind !== 'mark') return this.stage.run(cue);
     // Paused, or after a reload: the browser comes back for a link clicked in the chat
     const browser = this.browser ?? (await this.browserReady());

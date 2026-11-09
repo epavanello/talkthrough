@@ -131,14 +131,15 @@
         hint={{
           title: 'Next',
           body: stepSize
-            ? `The ${stepSize} hunks explained in this step are clear: mark them ok and go on.`
+            ? `Go on, and mark ok the ${stepSize === 1 ? 'part' : `${stepSize} parts`} Claude explained in this step (✓ ${stepSize}): you have them clear.`
             : 'Go on with the next block.',
           note: nextKey
         }}
         disabled={!app.canTalk}
         onclick={() => host.next()}
       >
-        Next{stepSize ? ` · ${stepSize} ok` : ''}
+        Next
+        {#if stepSize}<span class="text-xs tabular-nums opacity-80">✓ {stepSize}</span>{/if}
       </Button>
     </div>
   {/if}

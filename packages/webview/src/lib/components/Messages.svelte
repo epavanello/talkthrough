@@ -1,7 +1,8 @@
 <script lang="ts">
   import { ArrowRight, Check, Info, LoaderCircle, Mic } from '@lucide/svelte';
-  import type { ChatMessage, Cue, Sentence } from '@talkthrough/shared';
+  import { choiceText, type ChatMessage, type Cue, type Sentence } from '@talkthrough/shared';
   import { app, basename } from '$lib/app.svelte';
+  import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
   import { cn } from '$lib/utils';
 
@@ -9,7 +10,7 @@
   /** Auto messages shown whole, by id. */
   let expanded = $state(new Set<string>());
 
-  const ICONS = { show: '◆', open: '↗', refs: '⇄', page: '◎', mark: '▣' } as const;
+  const ICONS = { show: '◆', open: '↗', refs: '⇄', page: '◎', mark: '▣', choice: '›' } as const;
   /** Steps of the preparation shown at once; the older ones fold into a count. */
   const TRAIL = 6;
 
@@ -64,6 +65,17 @@
     return { kind: 'open', path: match[1].replace(/^\.?\//, ''), start, end: start, symbol: null };
   };
 
+  /** The replies a message offers to click, as its choice cues say them. */
+  const choicesOf = (message: ChatMessage) => [
+    ...new Set(
+      message.sentences.flatMap((sentence) =>
+        sentence.parts.flatMap((part) =>
+          part.type === 'cue' && part.cue.kind === 'choice' ? [choiceText(part.cue)] : []
+        )
+      )
+    )
+  ];
+
   /** Next, pressed or said: an action more than a message. */
   const isNext = (message: ChatMessage) => message.text.trim() === 'Next';
 
@@ -109,7 +121,7 @@
 {#snippet inline(text: string)}{#each text.split(/(`[^`]+`)/g) as piece, at (at)}{#if piece.length > 2 && piece.startsWith('`') && piece.endsWith('`')}{@const file = fileOf(piece.slice(1, -1))}{#if file}{@render chip(file)}{:else}<code class="rounded bg-muted px-1 font-mono text-[0.9em]">{piece.slice(1, -1)}</code>{/if}{:else}{piece.replace(/\*\*|__/g, '')}{/if}{/each}{/snippet}
 
 <!-- prettier-ignore -->
-{#snippet parts(sentence: Sentence)}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue'}{@render chip(part.cue)}{/if}{/each}{/snippet}
+{#snippet parts(sentence: Sentence)}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue' && part.cue.kind !== 'choice'}{@render chip(part.cue)}{/if}{/each}{/snippet}
 <!-- prettier-ignore -->
 {#snippet chip(cue: Cue)}<button class="mx-0.5 inline-flex items-center rounded border bg-muted px-1 align-baseline font-mono text-[11px] text-link hover:bg-accent" title={cueTitle(cue)} onclick={(event) => { event.stopPropagation(); void host.runCue(cue); }}>{cueLabel(cue)}</button>{/snippet}
 
@@ -193,6 +205,23 @@
               {/if}
             {/each}
           </div>
+          {@const choices = choicesOf(message)}
+          {#if choices.length && message === app.state.messages.at(-1)}
+            <!-- What can come next: a click sends it as the person's reply -->
+            <div class="mt-2 flex flex-wrap gap-1.5" aria-label="Replies">
+              {#each choices as choice (choice)}
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  icon={ArrowRight}
+                  disabled={!app.canTalk || app.state.status !== 'ready'}
+                  onclick={() => host.send(choice)}
+                >
+                  {choice}
+                </Button>
+              {/each}
+            </div>
+          {/if}
         {/if}
       </article>
     {/if}

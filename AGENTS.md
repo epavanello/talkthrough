@@ -57,7 +57,8 @@ and webview, esbuild for the host, e2e in a real VS Code.
 - Esc ends a turn with no Stop hook and puts the prompt back in the input: the session says
   "Interrupted." itself and Ctrl+U empties the input.
 - Stage cues (`[[show|open|refs path#Lx-y symbol]]`) are parsed in `cues.ts` and fired by the
-  player sentence by sentence. A `show` cue marks the hunks it overlaps as explained.
+  player sentence by sentence. `[[choice words]]` fires nothing: the last reply's choices are buttons
+  that send their words (`choiceText`). A `show` cue marks the hunks it overlaps as explained.
 
 ### Reviews kept
 

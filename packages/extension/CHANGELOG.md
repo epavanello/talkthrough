@@ -2,6 +2,9 @@
 
 ## 0.5.5
 
+- Claude ends a turn with up to three replies you can click ("Show the R2 adapter") instead of a
+  question to answer: a click sends it as your reply.
+- Next shows how many explained parts it marks ok (✓ 2), and its tooltip says so.
 - Panels open where there is room: the browser, or a file Claude opens beside the code, takes the
   whole area when nothing else is open, and moves aside once the code comes; an open browser stays in
   its column instead of leaving half the screen empty.

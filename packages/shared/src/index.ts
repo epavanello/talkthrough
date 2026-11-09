@@ -93,8 +93,14 @@ export interface Hotspot {
   anchors: string[];
 }
 
-/** show, open and refs act on code; page opens the app in the browser panel, mark points at it. */
-export type CueKind = 'show' | 'open' | 'refs' | 'page' | 'mark';
+/**
+ * show, open and refs act on code; page opens the app in the browser panel, mark points at it;
+ * choice is a reply the person can click, shown as a button under the message.
+ */
+export type CueKind = 'show' | 'open' | 'refs' | 'page' | 'mark' | 'choice';
+
+/** A choice cue's words: `[[choice Show the R2 adapter]]`. */
+export const choiceText = (cue: Cue) => (cue.symbol ? `${cue.path} ${cue.symbol}` : cue.path);
 
 /**
  * A stage direction inside a reply: `[[show src/a.ts#L10-20]]`, `[[page /events/42]]`,

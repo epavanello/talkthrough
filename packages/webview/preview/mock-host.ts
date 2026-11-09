@@ -334,6 +334,36 @@ const SCENES: Record<string, Partial<ReviewState>> = {
         { id, path, start, end, header, additions: 0, deletions: 0, key: id }
       ])
     ),
+    messages: [
+      ...review.messages.slice(0, 2),
+      {
+        id: 'm9',
+        role: 'claude',
+        at: now - 2 * MINUTE,
+        text: 'The action validates the fields, then creates the user.',
+        sentences: [
+          {
+            parts: [
+              { type: 'text', text: 'The action validates the fields, then creates the user.' },
+              {
+                type: 'cue',
+                cue: {
+                  kind: 'choice',
+                  path: 'Show',
+                  start: null,
+                  end: null,
+                  symbol: 'the email step'
+                }
+              },
+              {
+                type: 'cue',
+                cue: { kind: 'choice', path: 'Is', start: null, end: null, symbol: 'it tested?' }
+              }
+            ]
+          }
+        ]
+      }
+    ],
     coverage: { T1: 'ok', T2: 'explained', T3: 'todo', T4: 'todo' },
     step: ['T2'],
     blocks: [
