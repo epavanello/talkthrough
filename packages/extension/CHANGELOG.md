@@ -2,6 +2,8 @@
 
 ## 0.5.5
 
+- The chat stays scrolled to the bottom when a dictation is sent and Claude starts working: the box
+  below changing height no longer leaves the last message and the spinner out of sight.
 - Claude ends a turn with up to three replies you can click ("Show the R2 adapter") instead of a
   question to answer: a click sends it as your reply.
 - Next shows how many explained parts it marks ok (✓ 2), and its tooltip says so.

@@ -85,12 +85,36 @@
   // New messages, and the preparation's steps, scroll into view: only when they come (the state is
   // replaced on every update, the player's included), and at once (a smooth scroll stops halfway
   // when the first sentence read scrolls too)
-  let seen = 0;
+  let seen = '';
+  const toBottom = () =>
+    // After the layout settles: the composer below changes height too (dictation → text box)
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => list?.scrollTo({ top: list.scrollHeight }))
+    );
   $effect(() => {
-    const count = app.state.messages.length + app.state.trail.length;
-    if (count === seen) return;
-    seen = count;
-    queueMicrotask(() => list?.scrollTo({ top: list.scrollHeight }));
+    const isWorking = app.state.status === 'thinking' && !app.isPreparing;
+    const key = `${app.state.messages.length}:${app.state.trail.length}:${isWorking}`;
+    if (key === seen) return;
+    seen = key;
+    toBottom();
+  });
+
+  // At the bottom, the chat stays there when its height changes
+  let isAtBottom = true;
+  $effect(() => {
+    if (!list) return;
+    const element = list;
+    const onScroll = () =>
+      (isAtBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 24);
+    const observer = new ResizeObserver(() => {
+      if (isAtBottom) element.scrollTop = element.scrollHeight;
+    });
+    observer.observe(element);
+    element.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      element.removeEventListener('scroll', onScroll);
+    };
   });
 
   // So does the sentence being read, once each, and only when it is out of sight: scrolling by hand
