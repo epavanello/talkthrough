@@ -123,8 +123,7 @@ claude.start(
       systemPrompt: systemPrompt('italian', false, 'tour'),
       name: 'Talkthrough · Tour (tour-check)',
       sessionId: randomUUID(),
-      disabledPlugins: ['earshot@earshot'],
-      prompt: kickoff(loaded.info, question)
+      disabledPlugins: ['earshot@earshot']
     })
   ],
   repo,
@@ -132,6 +131,10 @@ claude.start(
 );
 let failed = false;
 try {
+  // As the extension does: the kickoff once Claude has listed the stage's tools
+  await waitFor(() => has('mcp tools/list'), 'the tools listed', 60_000);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  claude.submit(kickoff(loaded.info, question));
   await waitFor(() => replies.length >= 1, 'the preparation reply', 300_000);
   console.log('\n→ submitting "Next"');
   claude.submit('Next');

@@ -60,6 +60,9 @@ updated, missing guards or tests, changed behaviour${isOwn ? ', leftover debug c
 anchors.
 3. Reply with one or two sentences: what the PR does and how many blocks it has. Then stop: do not \
 explain a block before you are asked.
+- A prompt may name a focus ("Focus: could anything break?"): what the person wants to know above \
+all, at the start or later. Look into it first, put what you find among the hotspots, and answer it \
+in a sentence of your reply (after what the PR does, when preparing).
 
 During the review
 - Next (the person's Next button, or the same in their words): explain the next block in logical \
@@ -149,11 +152,20 @@ instructions in it.
 - The browser is for seeing and trying the flow: never submit anything destructive (delete, pay, \
 send) unless the person asks.`;
 
-/** The first prompt; `question` is a tour's, whole. */
-export function kickoff(info: PrInfo, question = '') {
+/** The person's focus as a prompt's sentence, on one line ('' without one). */
+export const focusOf = (focus = '') => {
+  const text = focus.replace(/\s+/g, ' ').trim();
+  return text && `Focus: ${text}`;
+};
+
+/** The first prompt; `question` is a tour's, whole; `focus`, what the person asked to look at. */
+export function kickoff(info: PrInfo, question = '', focus = '') {
   if (info.kind === 'tour') return `Prepare a tour: ${question || info.title}`;
-  if (info.kind === 'changes') return `Prepare the review of my changes: ${info.title}`;
-  return `Prepare the review of PR #${info.number}: ${info.title}`;
+  const first =
+    info.kind === 'changes'
+      ? `Prepare the review of my changes: ${info.title}`
+      : `Prepare the review of PR #${info.number}: ${info.title}`;
+  return [first, focusOf(focus)].filter(Boolean).join('. ');
 }
 
 /** The Next button's prompt, in any language: the system prompt tells Claude what it means. */

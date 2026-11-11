@@ -670,14 +670,21 @@ describe('Your own changes and tours', function () {
     rmSync(repo, { recursive: true, force: true });
   });
 
-  it('GIVEN staged and unstaged work WHEN the staged changes are reviewed THEN Claude maps only those', async () => {
+  it('GIVEN staged and unstaged work WHEN the staged changes are reviewed with a focus THEN Claude maps only those, told the focus', async () => {
     writeIn(repo, 'src/orders.ts', 'export const save = (total: number) => total;\n');
     gitIn(repo, 'add', 'src/orders.ts');
     writeIn(repo, 'src/price.ts', 'export const unstaged = true;\n');
 
-    await api.session.start({ kind: 'changes', scope: 'staged', repo }, options);
+    await api.session.start(
+      { kind: 'changes', scope: 'staged', repo, focus: 'Could anything break?' },
+      options
+    );
 
     await until(() => state().blocks.length > 0 && state().status === 'ready', 'the map');
+    assert.equal(
+      state().messages[0].text,
+      'Prepare the review of my changes: Staged changes on main. Focus: Could anything break?'
+    );
     assert.equal(state().pr?.kind, 'changes');
     assert.equal(state().pr?.title, 'Staged changes on main');
     assert.deepEqual(

@@ -18,7 +18,7 @@ describe('claudeArgs', () => {
   };
 
   it('GIVEN launch options WHEN built THEN the session gets tap dictation, the hooks, the MCP server and no prompts', () => {
-    const args = claudeArgs({ ...options, prompt: 'Prepare PR #1' });
+    const args = claudeArgs(options);
     const settings = JSON.parse(args[args.indexOf('--settings') + 1]);
     const mcp = JSON.parse(args[args.indexOf('--mcp-config') + 1]);
 
@@ -41,7 +41,8 @@ describe('claudeArgs', () => {
     expect(args).toEqual(
       expect.arrayContaining(['--strict-mcp-config', '--permission-mode', 'dontAsk'])
     );
-    expect(args.slice(-9)).toEqual([
+    // No first prompt on the command line: it would run before the MCP server connects
+    expect(args.slice(-8)).toEqual([
       '--name',
       'Talkthrough · PR #1: Round prices up',
       '--model',
@@ -49,8 +50,7 @@ describe('claudeArgs', () => {
       '--effort',
       'high',
       '--session-id',
-      options.sessionId,
-      'Prepare PR #1'
+      options.sessionId
     ]);
   });
 

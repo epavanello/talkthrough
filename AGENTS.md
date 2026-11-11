@@ -135,8 +135,12 @@ and webview, esbuild for the host, e2e in a real VS Code.
 
 ### Preparing, trust, checkout
 
-- The kickoff (and the "new commits" prompt of a resume) goes on Claude's command line; its message is
-  `isAuto`. `isPreparing` (shared): no map yet and Claude busy. Input waits meanwhile (the composer and
+- The kickoff (and the "new commits" prompt of a resume) is typed into the session once its tools are
+  listed (`firstPrompt`, `readyWhenListed`): one on Claude's command line runs before the MCP server
+  connects, without the stage's tools. Its message is `isAuto`.
+- The start screen's **Goal** (`app.focus`) is a review's `focus` (`StartInput`, kept with
+  the review: the kickoff's `Focus: …`, and a prompt of its own when a kept review goes on) or a
+  tour's question. `isPreparing` (shared): no map yet and Claude busy. Input waits meanwhile (the composer and
   the host's `isWaitingForMap`), and the webview shows `state.trail`, the turn's steps.
 - Hooks don't run in a folder Claude Code doesn't trust: its trust dialog shows on the screen
   (`dialog: 'trust'`), and `trustFolder()` moves its menu to "Yes" and presses Enter.

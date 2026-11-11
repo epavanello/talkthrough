@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { changeCounts, defaultBranch, loadChanges, loadTour, snapshot } from '../src/changes';
-import { systemPrompt } from '../src/prompts';
+import { kickoff, systemPrompt } from '../src/prompts';
 import { tourMap } from '../src/tools';
 
 describe('your own changes', () => {
@@ -170,5 +170,34 @@ describe('systemPrompt', () => {
     expect(own).toContain("the person's own changes");
     expect(own).toContain('leftover debug code');
     expect(systemPrompt('italian')).not.toContain("person's own changes");
+  });
+});
+
+describe('kickoff', () => {
+  const info = {
+    number: 7,
+    title: 'Round prices up',
+    url: null,
+    author: null,
+    base: 'main',
+    head: 'fix/prices',
+    headSha: 'b',
+    mergeBase: 'a',
+    repo: '/repo',
+    isLive: false
+  };
+
+  it('GIVEN a focus WHEN a review starts THEN Claude hears it on one line, after what to prepare', () => {
+    expect(kickoff(info, '', '  Could anything\nbreak? ')).toBe(
+      'Prepare the review of PR #7: Round prices up. Focus: Could anything break?'
+    );
+    expect(kickoff({ ...info, kind: 'changes', title: 'This branch' }, '', 'Payments')).toBe(
+      'Prepare the review of my changes: This branch. Focus: Payments'
+    );
+  });
+
+  it('GIVEN no focus WHEN a review starts THEN the kickoff is as before', () => {
+    expect(kickoff(info)).toBe('Prepare the review of PR #7: Round prices up');
+    expect(systemPrompt('italian')).toContain('Focus:');
   });
 });

@@ -23,6 +23,18 @@ interface Saved {
 class App {
   state = $state<ReviewState>(EMPTY_STATE);
   isMapOpen = $state(true);
+  /**
+   * The start screen's "what to look at": a review's focus, a tour's question. Starting one empties
+   * it.
+   */
+  focus = $state('');
+
+  /** The focus, taken for a start: what it held, and empty now. */
+  takeFocus() {
+    const focus = this.focus.trim();
+    this.focus = '';
+    return focus;
+  }
   #saved = $state<Saved>(vscode.getState<Saved>() ?? {});
 
   constructor() {

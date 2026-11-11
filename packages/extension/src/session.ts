@@ -53,7 +53,7 @@ import {
   type PrRef
 } from './pr';
 import { git, run } from './proc';
-import { NEXT, kickoff, systemPrompt, updatePrompt } from './prompts';
+import { NEXT, focusOf, kickoff, systemPrompt, updatePrompt } from './prompts';
 import { checkRequirements } from './requirements';
 import { ReviewStore } from './reviews';
 import { Browser, browserBin, markOf, probe, resolveUrl, type MarkKind } from './browser';
@@ -80,11 +80,15 @@ type LocalInput = {
   number: number;
   title: string;
 };
+/** `focus`: what the person wants to know above all ("could anything break?"), told to Claude. */
 export type StartInput =
-  | { kind: 'github'; pr: string; repo?: string }
+  | { kind: 'github'; pr: string; repo?: string; focus?: string }
   | LocalInput
-  | { kind: 'changes'; scope: ChangeScope; repo?: string }
+  | { kind: 'changes'; scope: ChangeScope; repo?: string; focus?: string }
   | { kind: 'tour'; question: string; repo?: string };
+
+/** The focus a start asks for, if any. */
+const focusIn = (input: StartInput) => ('focus' in input ? (input.focus ?? '') : '').trim();
 
 export interface StartOptions {
   /** Run this instead of the installed CLI (tests). */
@@ -266,8 +270,10 @@ export class ReviewSession implements vscode.Disposable {
   /** The running Claude listed the stage's tools: a prompt before that would run without them. */
   private isListed = false;
   private listTimer: NodeJS.Timeout | undefined;
-  /** The prompt on Claude's command line: shown as Talkthrough's, not the person's. */
+  /** A prompt Talkthrough sent (the kickoff, an update): shown as Talkthrough's, not the person's. */
   private autoPrompt: string | null = null;
+  /** The launch's first prompt, typed in once the stage's tools are listed. */
+  private firstPrompt: string | null = null;
   /** Bumped by every start, resume and stop: work for an older one stops where it is. */
   private run = 0;
   private readonly store: ReviewStore<SavedReview>;
@@ -528,7 +534,7 @@ export class ReviewSession implements vscode.Disposable {
       if (run !== this.run) return;
       if (saved) {
         this.show(saved, 'starting');
-        return await this.resume();
+        return await this.reopen({}, false, focusIn(input));
       }
       const loaded = ref ? await loadPr(repo, ref) : await load(input, repo);
       const parsed = loaded.info.kind === 'tour' ? [] : parsePatch(await prDiff(loaded.info));
@@ -554,7 +560,8 @@ export class ReviewSession implements vscode.Disposable {
       void this.ctx.workspaceState.update(OPEN_KEY, id);
       this.touch();
       await this.server.listen();
-      if (run === this.run) await this.launch(run, { prompt: kickoff(loaded.info, loaded.body) });
+      if (run === this.run)
+        await this.launch(run, { prompt: kickoff(loaded.info, loaded.body, focusIn(input)) });
     } catch (error) {
       if (run === this.run) this.fail(error);
     }
@@ -573,9 +580,13 @@ export class ReviewSession implements vscode.Disposable {
     return this.reopen(options, true);
   }
 
-  private async reopen(options: StartOptions, isFresh: boolean) {
+  /** `focus`: a new one, asked for when the review was started again; it replaces the kept one. */
+  private async reopen(options: StartOptions, isFresh: boolean, focus = '') {
     await this.ready;
     if (!this.review || !this.loaded) return;
+    const { input } = this.review;
+    if (focus && (input.kind === 'github' || input.kind === 'changes'))
+      this.review.input = { ...input, focus };
     this.apply(options);
     this.run++;
     await this.stopProcess();
@@ -613,8 +624,8 @@ export class ReviewSession implements vscode.Disposable {
         this.sessionId = randomUUID();
         this.pendingNotes = [];
         this.note('A new Claude session: it prepares the review again.');
-        prompt = kickoff(loaded.info);
-      }
+        prompt = kickoff(loaded.info, '', focusIn(review.input));
+      } else if (focus) prompt = [prompt, focusOf(focus)].filter(Boolean).join(' ');
       this.touch();
       await this.server.listen();
       if (run !== this.run) return;
@@ -727,6 +738,7 @@ export class ReviewSession implements vscode.Disposable {
     this.listTimer = undefined;
     this.hasAsked = false;
     this.autoPrompt = mode.prompt ?? null;
+    this.firstPrompt = mode.prompt ?? null;
     const startedAt = Date.now();
     claude.onOutput(() => this.watchScreen());
     claude.onExit((code) => this.exited(claude, code, run, mode, attempt, Date.now() - startedAt));
@@ -743,7 +755,6 @@ export class ReviewSession implements vscode.Disposable {
       ),
       sessionId: this.sessionId,
       resume: mode.isResume,
-      prompt: mode.prompt,
       disabledPlugins: config().get<string[]>('disabledPlugins', ['earshot@earshot'])
     });
     const env: NodeJS.ProcessEnv = {
@@ -983,14 +994,23 @@ export class ReviewSession implements vscode.Disposable {
   }
 
   /**
-   * With no prompt on its command line, a session that started takes the person's prompts once
+   * A session that started gets its first prompt (the kickoff, what changed), or the person's, once
    * Claude Code has listed the stage's tools: it connects them after SessionStart, and a prompt sent
-   * meanwhile would run without them. 10 s at most.
+   * meanwhile would run without them (one on the command line too). 10 s at most.
    */
   private readyWhenListed() {
     const isStarting = this.state.status === 'starting' || this.state.status === 'waiting';
-    if (!this.hasStarted || this.autoPrompt || !isStarting) return;
-    if (this.isListed) return this.setStatus('ready', null);
+    if (!this.hasStarted || !isStarting) return;
+    if (this.isListed && this.firstPrompt !== null) {
+      const prompt = this.firstPrompt;
+      this.firstPrompt = null;
+      return this.claude?.submit(prompt);
+    }
+    if (this.isListed) {
+      // A prompt Talkthrough sent is on its way: its turn says when it's the person's
+      if (this.autoPrompt === null) this.setStatus('ready', null);
+      return;
+    }
     this.track('Connecting the review tools');
     this.listTimer ??= setTimeout(() => {
       this.listTimer = undefined;

@@ -27,8 +27,6 @@ export interface LaunchOptions {
   sessionId: string;
   /** Goes on with `sessionId` (`--resume`): its conversation, Claude's memory of the review. */
   resume?: boolean;
-  /** A prompt sent as the session starts: the kickoff, or what changed while it was closed. */
-  prompt?: string;
   /** Plugins turned off in this session (a voice plugin would read the replies a second time). */
   disabledPlugins: string[];
 }
@@ -89,8 +87,7 @@ export function claudeArgs(options: LaunchOptions) {
     options.name,
     ...(options.model ? ['--model', options.model] : []),
     ...(options.effort ? ['--effort', options.effort] : []),
-    ...(options.resume ? ['--resume', options.sessionId] : ['--session-id', options.sessionId]),
-    ...(options.prompt ? [options.prompt] : [])
+    ...(options.resume ? ['--resume', options.sessionId] : ['--session-id', options.sessionId])
   ];
 }
 

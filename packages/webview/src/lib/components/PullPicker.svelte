@@ -71,15 +71,14 @@
   const handleKeydown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' || !isPrRef(text) || blocker) return;
     event.preventDefault();
-    void host.start(text.trim());
+    void host.start(text.trim(), app.takeFocus());
   };
 </script>
 
-<section class="flex flex-col gap-2 px-3 py-3" aria-labelledby="pulls-title">
+<!-- The last target of the start screen's "What to look at", after the code and your changes -->
+<section class="flex flex-col gap-1.5 px-3 pt-3 pb-3" role="group" aria-labelledby="pulls-title">
   <div class="flex items-center gap-2">
-    <h2 id="pulls-title" class="text-xs font-semibold uppercase text-muted-foreground">
-      Pull requests
-    </h2>
+    <h3 id="pulls-title" class="text-xs font-semibold">A pull request</h3>
     {#if isLoading && list}<LoaderCircle
         class="size-3 animate-spin text-muted-foreground"
         aria-label="Loading"
@@ -125,7 +124,7 @@
     <button
       class="flex items-center gap-2 rounded border border-ring px-2 py-1.5 text-left hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
       disabled={Boolean(blocker)}
-      onclick={() => host.start(text.trim())}
+      onclick={() => host.start(text.trim(), app.takeFocus())}
     >
       <ArrowRight class="size-3.5 shrink-0 text-link" />
       <span class="min-w-0 flex-1 truncate"
@@ -172,7 +171,7 @@
             title={review
               ? 'Go on with this review: Claude remembers it'
               : 'Start a review of this pull request'}
-            onclick={() => host.start(pr.url)}
+            onclick={() => host.start(pr.url, app.takeFocus())}
           >
             <span class="flex items-baseline gap-1.5">
               <span class="shrink-0 text-muted-foreground tabular-nums">#{pr.number}</span>

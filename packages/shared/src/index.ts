@@ -336,12 +336,15 @@ export const isPreparing = (state: ReviewState) =>
 /** What the webview can ask the extension host. */
 export interface HostApi {
   getState(): Promise<ReviewState>;
-  /** A PR number or URL; empty asks for one. A PR with a kept review goes on with it. */
-  start(pr: string): Promise<void>;
+  /**
+   * A PR number or URL; empty asks for one. A PR with a kept review goes on with it. `focus`: what
+   * the person wants to know above all ("could anything break?"), told to Claude.
+   */
+  start(pr: string, focus?: string): Promise<void>;
   /** The open pull requests of a list, narrowed by search text. */
   listPulls(filter: PullFilter, text: string): Promise<PullList>;
   /** A review of your own changes; one kept for the same scope goes on with them. */
-  reviewChanges(scope: ChangeScope): Promise<void>;
+  reviewChanges(scope: ChangeScope, focus?: string): Promise<void>;
   /** A guided tour of how something works, from a question ("how does sign-up work?"). */
   startTour(question: string): Promise<void>;
   /** Opens a kept review and goes on with its Claude session. */

@@ -123,15 +123,15 @@ const options = {
   disabledPlugins: ['earshot@earshot']
 };
 console.log(`claude in ${cwd}, server on ${server.port}, session ${sessionId}`);
-claude.start(
-  ['claude', ...claudeArgs({ ...options, prompt: 'Prepare the review of PR #1: Round prices up' })],
-  cwd,
-  env
-);
+claude.start(['claude', ...claudeArgs(options)], cwd, env);
 let failed = false;
 let typed = '';
 let resumed: ClaudeProcess | null = null;
 try {
+  // As the extension does: the kickoff once Claude has listed the stage's tools
+  await waitFor(() => has('mcp tools/list'), 'the tools listed', 60_000, claude);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  claude.submit('Prepare the review of PR #1: Round prices up');
   await waitFor(() => replies.length >= 1, 'the preparation reply', 180_000, claude);
   console.log('\n→ submitting "Next"');
   claude.submit('Next');

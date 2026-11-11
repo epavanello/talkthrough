@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- A **Goal** on the start screen: what you want to know above all ("could anything break?"). Then
+  pick what to look at, the code (a **Tour**), your changes or a pull request: Claude looks into the
+  goal first, its hotspots and first reply included; a review in progress hears it too.
+- A review or a tour no longer starts without its tools: the first prompt waits until Claude has
+  connected them, instead of answering that they aren't loaded.
+
 ## 0.5.5
 
 - Files at the repository's root (`Dockerfile`, `.env.example`, `playwright.config.ts`) are links

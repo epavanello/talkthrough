@@ -99,7 +99,11 @@ async function rpc(method, params) {
   return response.json();
 }
 
+/** Like Claude Code: the stage's tools exist once listed, and a turn that started sooner has none. */
+let isListed = false;
+
 async function tool(name, args = {}) {
+  if (!isListed) throw new Error(`No tool ${name}: the MCP server is not connected yet`);
   await runHook('PreToolUse', { tool_name: `mcp__talkthrough__${name}`, tool_input: args });
   const reply = await rpc('tools/call', { name, arguments: args });
   return reply.result?.content?.[0]?.text ?? '';
@@ -278,6 +282,8 @@ process.stdin.on('data', (data) => {
 });
 
 await runHook('SessionStart', { source: resume ? 'resume' : 'startup', model });
+// Like Claude Code: a prompt on the command line runs at once, before the MCP servers connect
+if (firstPrompt) enqueue(firstPrompt);
 // Like Claude Code: the MCP servers connect after SessionStart, and their tools are listed
 await rpc('initialize', {
   protocolVersion: '2025-06-18',
@@ -288,5 +294,5 @@ await new Promise((resolve) =>
   setTimeout(resolve, Number(process.env.FAKE_CLAUDE_LIST_DELAY ?? 0))
 );
 await rpc('tools/list', {});
+isListed = true;
 write('fake claude ready');
-if (firstPrompt) enqueue(firstPrompt);

@@ -29,7 +29,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     void vscode.window.showErrorMessage(`Talkthrough: ${(error as Error).message}`);
   };
 
-  const start = async (pr: string) => {
+  const start = async (pr: string, focus?: string) => {
     const value =
       pr.trim() ||
       (await vscode.window.showInputBox({
@@ -40,10 +40,10 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       }));
     if (!value) return;
     await focusChat();
-    await review.start({ kind: 'github', pr: value });
+    await review.start({ kind: 'github', pr: value, focus });
   };
 
-  const reviewChanges = async (scope?: ChangeScope) => {
+  const reviewChanges = async (scope?: ChangeScope, focus?: string) => {
     const picked =
       scope ??
       (
@@ -70,7 +70,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       )?.scope;
     if (!picked) return;
     await focusChat();
-    await review.start({ kind: 'changes', scope: picked });
+    await review.start({ kind: 'changes', scope: picked, focus });
   };
 
   const startTour = async (question: string) => {

@@ -46,9 +46,12 @@ GitHub.
 
 - **Reviews in progress** stay listed with their progress and last activity, each with its own Claude
   session: open one, even days later, in another window or worktree, and Claude remembers it.
-- **Your changes** and **Explain how something works** start a review of your own work or a tour.
-- **Pull requests** from GitHub's own lists: review requested from you, assigned, yours, all open, with
-  search. A number or URL works too.
+- **Goal** (optional): what you want to know above all ("could anything break?"). Claude starts from
+  it, whatever you pick under **What to look at**:
+  - **The code**: a **Tour** of what the goal asks about.
+  - **Your changes**: staged, uncommitted, or this whole branch.
+  - **A pull request** from GitHub's own lists: review requested from you, assigned, yours, all open,
+    with search. A number or URL works too.
 
 ## 🔁 New commits? Review only what changed
 
@@ -67,7 +70,7 @@ notices when your changes move, and **Update** reviews only what changed.
 
 ## 🧭 Tours: how does this work?
 
-Ask a question ("how does the sign-up form work?") and Claude finds the code, draws a **tour** of it in
+Write a question as the **Goal** ("how does the sign-up form work?"), press **Tour**, and Claude finds the code, draws a **tour** of it in
 the order it runs (entry point, UI, client logic, server, data), and walks you through it a stop at a
 time, with the files open and highlighted and, when there is a page, the app beside them. Next, the
 map, the voice and the memory work as in a review: a tour is kept, and goes on later.
