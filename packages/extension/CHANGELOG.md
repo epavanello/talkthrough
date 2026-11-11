@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+- The player shows how far into the sentence the voice is, word by word.
+- Pause and resume goes on from the word where the voice stopped (one word back, so none is cut),
+  instead of reading the sentence again.
+- Back first goes to the start of the sentence being read, then to the previous one.
+- Claude no longer ends a reply by inviting you to go on, as a question or a choice: Next is always
+  there. Choices are only for a detour worth taking.
+
 ## 0.6.0
 
 - A **Goal** on the start screen: what you want to know above all ("could anything break?"). Then

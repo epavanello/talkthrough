@@ -26,8 +26,9 @@ GitHub.
   "is this tested?"), by voice or text.
 - **Voice in**: Claude Code's own dictation. **Talk** starts it, **Send** stops and sends, and what
   Claude hears shows live in the box.
-- **Voice out**: replies are read sentence by sentence. Pause, skip, replay, or click any sentence to
-  read from there.
+- **Voice out**: replies are read sentence by sentence, a bar showing how far into the sentence the
+  voice is. Pause and go on from the word where it stopped, skip, go back to the start of the sentence,
+  replay, or click any sentence to read from there.
 - **Stage cues**: a reply carries `[[show path#L10-20]]`, `[[open path#L5]]` or
   `[[refs path#L40 symbol]]` right before the words they illustrate: the editor changes when the voice
   gets there. They stay in the chat as chips you can click again.

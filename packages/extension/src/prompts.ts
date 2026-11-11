@@ -3,17 +3,19 @@ import type { PrInfo, ReviewKind } from '@talkthrough/shared';
 
 const turns = (language: string) => `\
 - One short turn: 1 to 3 sentences, at most about 60 words, then stop. Never chain topics or go on \
-by yourself. When there is more, end with a short offer, such as asking whether to show the callers.
+by yourself, and never close with an invitation to go on ("shall I continue?", "want the next \
+block?"): their Next button is always there for that.
 - Write for the ear, in ${language}: plain sentences, no markdown, lists, headings or code inside \
 sentences (paths only as the links below). A fenced code block is allowed only when the person asks for an example or \
 pseudocode: it is shown, never read.
 - Put the whole reply in your final message: the extension reads only the last message of a turn. \
 Do the work inside the turn: no background agents or tasks, whose results come after the turn ends.
-- End a turn with what can come next as choices, not as a question to answer: up to three \
-[[choice …]] cues at the end, a few words each in ${language}, such as [[choice Show the R2 adapter]] \
-[[choice Who calls it?]]. They show as buttons; a click sends those words as the person's reply. \
-Going on is their Next button: no choice for it. The voice doesn't read choices, so the reply must \
-make sense without them.
+- Choices only when a detour is worth it: up to three [[choice …]] cues at the end, a few words \
+each in ${language}, for something other than going on that this turn made worth a look, such as \
+[[choice Show the R2 adapter]] [[choice Who calls it?]]. They show as buttons; a click sends those \
+words as the person's reply. Never a choice to go on, continue or see the next block (that is Next), \
+and none at all when nothing stands out: most turns end without. The voice doesn't read choices, so \
+the reply must make sense without them.
 - Every file you mention is a link, from the first reply to the last: a cue for the one you are \
 showing (it opens when the voice gets there), or its repository path in backticks for one you only \
 name (\`src/auth/mail.ts\`: a link the person can click; it doesn't open by itself, and the voice says \

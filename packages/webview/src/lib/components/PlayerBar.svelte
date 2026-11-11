@@ -3,6 +3,7 @@
   import { app, shortcutOf } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
+  import { cn } from '$lib/utils';
 
   const player = $derived(app.state.player);
   const message = $derived(app.state.messages.find((one) => one.id === player.messageId));
@@ -16,7 +17,7 @@
     variant="ghost"
     size="icon-xs"
     icon={SkipBack}
-    hint="Previous sentence"
+    hint="The start of this sentence, then the previous one"
     disabled={!message || !canRead}
     onclick={() => host.seek(-1)}
   />
@@ -25,7 +26,7 @@
     size="icon-xs"
     icon={player.isPlaying ? Pause : Play}
     hint={{
-      body: player.isPlaying ? 'Pause' : 'Read from the current sentence',
+      body: player.isPlaying ? 'Pause' : 'Go on from where it stopped',
       note: shortcutOf('talkthrough.pauseResume')
     }}
     disabled={!message || !canRead}
@@ -48,9 +49,28 @@
     onclick={() => host.replayLast()}
   />
   {#if message && canRead}
-    <span class="ml-1 truncate text-xs tabular-nums text-muted-foreground">
-      sentence {player.sentence + 1}/{message.sentences.length}
-    </span>
+    <div class="ml-1 flex min-w-0 flex-1 items-center gap-1.5">
+      <span class="shrink-0 text-xs tabular-nums text-muted-foreground" title="Sentence">
+        {player.sentence + 1}/{message.sentences.length}
+      </span>
+      <!-- How far the voice is through this sentence, word by word; a pause holds it -->
+      <div
+        class="h-1 min-w-6 max-w-40 flex-1 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="This sentence"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(player.progress * 100)}
+      >
+        <div
+          class={cn(
+            'h-full rounded-full transition-[width] duration-300 ease-linear',
+            player.isPlaying ? 'bg-link' : 'bg-muted-foreground'
+          )}
+          style:width="{player.progress * 100}%"
+        ></div>
+      </div>
+    </div>
   {/if}
   <Button
     class="ml-auto"

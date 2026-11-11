@@ -171,6 +171,14 @@ describe('systemPrompt', () => {
     expect(own).toContain('leftover debug code');
     expect(systemPrompt('italian')).not.toContain("person's own changes");
   });
+
+  it('GIVEN any kind WHEN a turn ends THEN going on is left to Next, never a choice or an invitation', () => {
+    for (const kind of ['pr', 'changes', 'tour'] as const) {
+      const prompt = systemPrompt('italian', false, kind);
+      expect(prompt).toContain('Never a choice to go on');
+      expect(prompt).toContain('never close with an invitation to go on');
+    }
+  });
 });
 
 describe('kickoff', () => {

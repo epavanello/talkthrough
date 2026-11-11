@@ -143,6 +143,8 @@ export interface PlayerState {
   messageId: string | null;
   sentence: number;
   isPlaying: boolean;
+  /** How far the voice is through the sentence, 0 to 1, word by word; it stays where a pause left it. */
+  progress: number;
 }
 
 export type SessionStatus =
@@ -304,7 +306,7 @@ export const EMPTY_STATE: ReviewState = {
   blocks: [],
   hotspots: [],
   messages: [],
-  player: { messageId: null, sentence: 0, isPlaying: false },
+  player: { messageId: null, sentence: 0, isPlaying: false, progress: 0 },
   isSpeechOn: true,
   isRecording: false,
   draft: '',
