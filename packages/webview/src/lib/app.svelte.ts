@@ -23,6 +23,8 @@ interface Saved {
 class App {
   state = $state<ReviewState>(EMPTY_STATE);
   isMapOpen = $state(true);
+  /** How far the voice is through its sentence: the state's, then word by word from `progress`. */
+  progress = $state(0);
   /**
    * The start screen's "what to look at": a review's focus, a tour's question. Starting one empties
    * it.
@@ -39,11 +41,17 @@ class App {
 
   constructor() {
     onHostEvent((event) => {
-      if (event.event === 'state') this.state = event.state;
+      if (event.event === 'state') this.#show(event.state);
+      else if (event.event === 'progress') this.progress = event.progress;
     });
     // The browser panel mounts the same bundle: it has no review state to ask for
     if (document.body.dataset.view !== 'browser')
-      void host.getState().then((state) => (this.state = state));
+      void host.getState().then((state) => this.#show(state));
+  }
+
+  #show(state: ReviewState) {
+    this.state = state;
+    this.progress = state.player.progress;
   }
 
   #remember(fields: Saved) {

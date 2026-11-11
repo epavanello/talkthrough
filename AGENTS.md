@@ -60,8 +60,10 @@ and webview, esbuild for the host, e2e in a real VS Code.
   player sentence by sentence. `[[choice words]]` fires nothing: the last reply's choices are buttons
   that send their words (`choiceText`). A `show` cue marks the hunks it overlaps as explained.
 - The voice is `say -i` (`SaySpeaker`): with a TERM it highlights each word as it says it, on a pipe
-  too, and the player reads that as where the voice is (`PlayerState.progress`, the place in the
-  sentence). Pause keeps the place; resume says the rest from the word before it. Back goes to the
+  too, and the player reads that as where the voice is (the place in the sentence). A word sends only
+  a `progress` event (`onProgress`), never the whole state: a state message per word re-renders the
+  webview and makes the voice stutter. `PlayerState.isWaiting`: playing, no word said yet;
+  `isSentenceBySentence`: a mode, every play stops once its sentence is said, ready at the next one. Pause keeps the place; resume says the rest from the word before it. Back goes to the
   sentence's start first.
 
 ### Reviews kept

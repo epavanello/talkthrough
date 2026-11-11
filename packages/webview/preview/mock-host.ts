@@ -207,7 +207,14 @@ const review: ReviewState = {
     },
     { id: 'm6', role: 'note', at: now - 10 * MINUTE, text: 'No speech detected.', sentences: [] }
   ],
-  player: { messageId: 'm4', sentence: 1, isPlaying: true, progress: 0.4 },
+  player: {
+    messageId: 'm4',
+    sentence: 1,
+    isPlaying: true,
+    progress: 0.4,
+    isWaiting: false,
+    isSentenceBySentence: false
+  },
   model: 'claude-opus-5-5',
   isSpeechOn: true,
   reviews: [],
@@ -281,7 +288,14 @@ const SCENES: Record<string, Partial<ReviewState>> = {
     blocks: [],
     hotspots: [],
     messages: review.messages.slice(0, 1),
-    player: { messageId: null, sentence: 0, isPlaying: false, progress: 0 },
+    player: {
+      messageId: null,
+      sentence: 0,
+      isPlaying: false,
+      progress: 0,
+      isWaiting: false,
+      isSentenceBySentence: false
+    },
     trail: [
       'Loading the pull request',
       'Starting Claude',

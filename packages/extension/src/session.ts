@@ -290,6 +290,7 @@ export class ReviewSession implements vscode.Disposable {
   /** The tools the running Claude has: the stage's, and the browser's when it is on. */
   private tools = TOOLS;
   private readonly listeners = new Set<() => void>();
+  private readonly progressListeners = new Set<(progress: number) => void>();
   private notifyTimer: NodeJS.Timeout | undefined;
   private saveTimer: NodeJS.Timeout | undefined;
   private screenTimer: NodeJS.Timeout | undefined;
@@ -337,7 +338,8 @@ export class ReviewSession implements vscode.Disposable {
       () => {
         this.state.player = { ...this.player.state };
         this.changed();
-      }
+      },
+      (progress) => this.progressListeners.forEach((listener) => listener(progress))
     );
     this.stage = new Stage(
       () => (this.loaded ? { pr: this.loaded.info, files: this.state.files } : null),
@@ -395,6 +397,12 @@ export class ReviewSession implements vscode.Disposable {
   onChange(listener: () => void) {
     this.listeners.add(listener);
     return { dispose: () => this.listeners.delete(listener) };
+  }
+
+  /** The voice moved on a word: only how far it is through its sentence, never the whole state. */
+  onProgress(listener: (progress: number) => void) {
+    this.progressListeners.add(listener);
+    return { dispose: () => this.progressListeners.delete(listener) };
   }
 
   /** Coalesces a burst of changes into one state message. */
@@ -1640,6 +1648,10 @@ export class ReviewSession implements vscode.Disposable {
 
   seek(delta: number) {
     this.player.seek(delta);
+  }
+
+  setSentenceBySentence(isOn: boolean) {
+    this.player.setSentenceBySentence(isOn);
   }
 
   replayLast() {

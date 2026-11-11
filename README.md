@@ -28,7 +28,8 @@ GitHub.
   Claude hears shows live in the box.
 - **Voice out**: replies are read sentence by sentence, a bar showing how far into the sentence the
   voice is. Pause and go on from the word where it stopped, skip, go back to the start of the sentence,
-  replay, or click any sentence to read from there.
+  one sentence at a time (every play stops at the end of its sentence, so you look at the code between
+  them), replay, or click any sentence to read from there.
 - **Stage cues**: a reply carries `[[show path#L10-20]]`, `[[open path#L5]]` or
   `[[refs path#L40 symbol]]` right before the words they illustrate: the editor changes when the voice
   gets there. They stay in the chat as chips you can click again.

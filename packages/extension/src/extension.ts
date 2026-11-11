@@ -161,6 +161,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     play: async (messageId, sentence) => review.play(messageId, sentence),
     pauseResume: async () => review.pauseResume(),
     seek: async (delta) => review.seek(delta),
+    setSentenceBySentence: async (isOn) => review.setSentenceBySentence(isOn),
     replayLast: async () => review.replayLast(),
     stopSpeech: async () => review.stopSpeech(),
     setSpeech: async (isOn) => review.setSpeech(isOn),
@@ -199,6 +200,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     log,
     review,
     review.onChange(() => view.post({ event: 'state', state: review.state })),
+    review.onProgress((progress) => view.post({ event: 'progress', progress })),
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new RevisionProvider()),
     vscode.window.registerWebviewViewProvider(
       hasOwnBar() ? 'talkthrough.panel' : 'talkthrough.chat',

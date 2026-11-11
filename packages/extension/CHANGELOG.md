@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+- **One sentence at a time**, a toggle in the player: every play says one sentence and stops, ready
+  at the next one, so you can look at the code between them. Play reads the next.
+- The voice no longer stutters: following it word by word redrew the whole panel each time.
+- A small spinner in the player while the voice is starting, until its first word.
+- The sentence's progress bar has a visible track, so you can tell half from nearly done.
+- Next is off on the last sentence, and Back on the start of the first; Play after the end reads the
+  reply again.
+
 ## 0.7.0
 
 - The player shows how far into the sentence the voice is, word by word.

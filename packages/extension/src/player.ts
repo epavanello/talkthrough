@@ -101,12 +101,26 @@ export class Player {
   private isSilent = false;
   /** Where the voice is in the current sentence; a pause keeps it. */
   private place: Place = START;
-  state: PlayerState = { messageId: null, sentence: 0, isPlaying: false, progress: 0 };
+  /** How far `place` is through the sentence, 0 to 1. */
+  private progress = 0;
+  state: PlayerState = {
+    messageId: null,
+    sentence: 0,
+    isPlaying: false,
+    progress: 0,
+    isWaiting: false,
+    isSentenceBySentence: false
+  };
 
+  /**
+   * `onChange`: the state changed (a sentence, play or pause). `onProgress`: the voice moved on a
+   * word, many times a second: kept apart so a word doesn't send the whole review state.
+   */
   constructor(
     private readonly speaker: Speaker,
     private readonly runCue: (cue: Cue) => Promise<void>,
-    private readonly onChange: () => void
+    private readonly onChange: () => void,
+    private readonly onProgress: (progress: number) => void = () => {}
   ) {}
 
   /** Reads `message` from sentence `from` (at `place` in it); `isSilent` only fires its cues. */
@@ -138,16 +152,23 @@ export class Player {
       const sentence = message.sentences[index];
       const words = wordsOf(sentence);
       const first = index === from ? start : START;
+      this.place = first;
+      this.progress = progressAt(sentence, first);
+      this.set({
+        messageId: message.id,
+        sentence: index,
+        isPlaying: !isSilent,
+        progress: this.progress,
+        // Until the first word of this play
+        isWaiting: !isSilent && (index === from || this.state.isWaiting),
+        isSentenceBySentence: this.state.isSentenceBySentence
+      });
       const at = (place: Place) => {
         this.place = place;
-        this.set({
-          messageId: message.id,
-          sentence: index,
-          isPlaying: !isSilent,
-          progress: progressAt(sentence, place)
-        });
+        this.progress = progressAt(sentence, place);
+        if (this.state.isWaiting) this.set({ ...this.state, isWaiting: false });
+        this.onProgress(this.progress);
       };
-      at(first);
       // A resume goes on from its part: the cues before it already fired
       for (let part = first.part; part < sentence.parts.length; part++) {
         if (signal.aborted) return;
@@ -163,15 +184,32 @@ export class Player {
         }
         if (signal.aborted) return;
       }
+      // One sentence at a time: ready at the next one, which Play reads
+      if (this.state.isSentenceBySentence && !isSilent && index < message.sentences.length - 1) {
+        this.controller = null;
+        this.place = START;
+        this.progress = 0;
+        this.set({
+          ...this.state,
+          sentence: index + 1,
+          isPlaying: false,
+          progress: 0,
+          isWaiting: false
+        });
+        return;
+      }
     }
     if (signal.aborted) return;
     this.controller = null;
     this.place = START;
+    this.progress = 1;
     this.set({
+      ...this.state,
       messageId: message.id,
       sentence: message.sentences.length - 1,
       isPlaying: false,
-      progress: 1
+      progress: 1,
+      isWaiting: false
     });
   }
 
@@ -180,21 +218,24 @@ export class Player {
     if (!this.state.isPlaying) return;
     this.controller?.abort();
     this.controller = null;
-    this.set({ ...this.state, isPlaying: false });
+    this.set({
+      ...this.state,
+      isPlaying: false,
+      isWaiting: false,
+      progress: this.progress
+    });
   }
 
-  /** Goes on from the word before the one a pause stopped at; from the start after the last one. */
+  /**
+   * Goes on from the word before the one a pause stopped at. Once the whole reply was read, it reads
+   * it again from the start.
+   */
   resume() {
     if (!this.message) return;
     const sentence = this.message.sentences[this.state.sentence];
-    const isOver = this.state.progress >= 1;
-    const place =
-      !sentence || isOver
-        ? START
-        : {
-            part: this.place.part,
-            offset: wordBefore(wordsOf(sentence)[this.place.part] ?? '', this.place.offset)
-          };
+    if (!sentence || this.progress >= 1) return this.play(this.message, 0, this.isSilent);
+    const words = wordsOf(sentence)[this.place.part] ?? '';
+    const place = { part: this.place.part, offset: wordBefore(words, this.place.offset) };
     this.play(this.message, this.state.sentence, this.isSilent, place);
   }
 
@@ -206,15 +247,28 @@ export class Player {
   /** Next or previous sentence; back from inside a sentence first goes to its start. */
   seek(delta: number) {
     if (!this.message) return;
-    const isInside = this.state.progress > 0 && this.state.progress < 1;
+    const isInside = this.progress > 0 && this.progress < 1;
     const to = delta < 0 && isInside ? this.state.sentence : this.state.sentence + delta;
+    if (to < 0 || to >= this.message.sentences.length) return;
     this.play(this.message, to, this.isSilent);
+  }
+
+  /** The voice stops once the sentence it is saying ends, ready at the next one. */
+  setSentenceBySentence(isOn: boolean) {
+    if (this.state.isSentenceBySentence !== isOn)
+      this.set({ ...this.state, isSentenceBySentence: isOn });
   }
 
   stop() {
     this.controller?.abort();
     this.controller = null;
-    if (this.state.isPlaying) this.set({ ...this.state, isPlaying: false });
+    if (this.state.isPlaying)
+      this.set({
+        ...this.state,
+        isPlaying: false,
+        isWaiting: false,
+        progress: this.progress
+      });
   }
 
   private set(state: PlayerState) {

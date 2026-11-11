@@ -143,8 +143,18 @@ export interface PlayerState {
   messageId: string | null;
   sentence: number;
   isPlaying: boolean;
-  /** How far the voice is through the sentence, 0 to 1, word by word; it stays where a pause left it. */
+  /**
+   * How far the voice is through the sentence, 0 to 1, as of the last change of sentence or play
+   * state; word by word it moves with `progress` events, which leave the rest of the state alone.
+   */
   progress: number;
+  /** Playing, but the voice hasn't said its first word yet (`say` starting, a cue opening a file). */
+  isWaiting: boolean;
+  /**
+   * One sentence at a time: every play stops at the end of its sentence, ready at the next one, so
+   * the person looks at the code between them. Stays on until turned off.
+   */
+  isSentenceBySentence: boolean;
 }
 
 export type SessionStatus =
@@ -306,7 +316,14 @@ export const EMPTY_STATE: ReviewState = {
   blocks: [],
   hotspots: [],
   messages: [],
-  player: { messageId: null, sentence: 0, isPlaying: false, progress: 0 },
+  player: {
+    messageId: null,
+    sentence: 0,
+    isPlaying: false,
+    progress: 0,
+    isWaiting: false,
+    isSentenceBySentence: false
+  },
   isSpeechOn: true,
   isRecording: false,
   draft: '',
@@ -387,6 +404,8 @@ export interface HostApi {
   pauseResume(): Promise<void>;
   /** Previous (-1) or next (+1) sentence. */
   seek(delta: number): Promise<void>;
+  /** One sentence at a time, on or off: every play stops at the end of its sentence. */
+  setSentenceBySentence(isOn: boolean): Promise<void>;
   replayLast(): Promise<void>;
   stopSpeech(): Promise<void>;
   setSpeech(isOn: boolean): Promise<void>;
@@ -518,7 +537,9 @@ export type HostEvent =
   | { event: 'frame'; data: string; width: number; height: number }
   | { event: 'browser'; page: BrowserPage | null; marks: BrowserMark[]; isLive: boolean }
   /** What the browser just did, in a few words. */
-  | { event: 'activity'; text: string };
+  | { event: 'activity'; text: string }
+  /** How far the voice is through its sentence, word by word: the player bar only. */
+  | { event: 'progress'; progress: number };
 
 export interface RpcRequest {
   id: number;

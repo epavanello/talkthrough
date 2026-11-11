@@ -40,22 +40,24 @@ const until = async (check: () => boolean) => {
 
 function setup() {
   const speaker = new FakeSpeaker();
+  const seen = { changes: 0, progress: 0 };
   const player = new Player(
     speaker,
     async () => {},
-    () => {}
+    () => seen.changes++,
+    (progress) => (seen.progress = progress)
   );
-  return { speaker, player };
+  return { speaker, player, seen };
 }
 
 describe('Player', () => {
   it('GIVEN a sentence half read WHEN paused and resumed THEN it goes on from the word before, its progress held', async () => {
-    const { speaker, player } = setup();
+    const { speaker, player, seen } = setup();
     player.play(message);
-    await until(() => player.state.progress > 0.5);
+    await until(() => seen.progress > 0.5);
 
     player.pause();
-    const held = player.state.progress;
+    const held = seen.progress;
     await wait(60);
 
     expect(player.state).toMatchObject({ sentence: 0, isPlaying: false, progress: held });
@@ -69,9 +71,9 @@ describe('Player', () => {
   });
 
   it('GIVEN the voice inside a sentence WHEN back THEN it starts that sentence again; at its start, the previous one', async () => {
-    const { speaker, player } = setup();
+    const { speaker, player, seen } = setup();
     player.play(message, 1);
-    await until(() => player.state.progress > 0);
+    await until(() => seen.progress > 0);
 
     player.seek(-1);
     await until(() => speaker.said.length === 2);
@@ -90,5 +92,49 @@ describe('Player', () => {
 
     await until(() => !player.state.isPlaying && player.state.progress === 1);
     expect(player.state.sentence).toBe(1);
+  });
+
+  it('GIVEN a play WHEN the voice starts and goes on THEN it waits until the first word, and words move only the progress', async () => {
+    const { player, seen } = setup();
+    player.play(message);
+
+    expect(player.state).toMatchObject({ isPlaying: true, isWaiting: true });
+    await until(() => !player.state.isWaiting);
+    const changes = seen.changes;
+    await until(() => seen.progress > 0.5);
+    expect(seen.changes, 'no state change for a word').toBe(changes);
+    player.stop();
+  });
+
+  it('GIVEN one sentence at a time WHEN played THEN each play says one sentence and waits at the next, until turned off', async () => {
+    const { speaker, player } = setup();
+    player.setSentenceBySentence(true);
+    player.play(message);
+
+    await until(() => speaker.said.length === 1 && !player.state.isPlaying);
+    expect(player.state).toMatchObject({ sentence: 1, progress: 0, isSentenceBySentence: true });
+    player.resume();
+    await until(() => speaker.said.length === 2);
+    expect(speaker.said[1]).toBe('Sette otto.');
+    await until(() => !player.state.isPlaying);
+    expect(player.state.isSentenceBySentence).toBe(true);
+
+    player.setSentenceBySentence(false);
+    player.play(message);
+    await until(() => speaker.said.length === 4);
+    expect(speaker.said.slice(2)).toEqual(['Uno due tre quattro cinque sei.', 'Sette otto.']);
+  });
+
+  it('GIVEN the last sentence WHEN next THEN nothing happens', async () => {
+    const { speaker, player } = setup();
+    player.play(message, 1);
+    await until(() => speaker.said.length === 1);
+
+    player.seek(1);
+
+    await wait(30);
+    expect(speaker.said).toHaveLength(1);
+    expect(player.state.sentence).toBe(1);
+    player.stop();
   });
 });
