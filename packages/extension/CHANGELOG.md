@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- A review stopped before Claude got to start it (closed, or the window reloaded while the review
+  tools were connecting) starts its Claude session on Resume, instead of trying to reopen one that
+  never began and failing with "no conversation with its id".
+
 ## 0.8.1
 
 - Reviewing your changes (staged, uncommitted, this branch) always starts a new review, with a new

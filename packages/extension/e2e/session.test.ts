@@ -734,6 +734,38 @@ describe('Your own changes and tours', function () {
     gitIn(repo, 'checkout', '-q', 'main');
   });
 
+  it('GIVEN a review stopped before Claude got the kickoff WHEN it is resumed THEN it starts its session instead of resuming none', async () => {
+    const fails = path.join(repo, '..', `fails-${Date.now()}`);
+    // Any resume would find no conversation
+    writeFileSync(fails, '9');
+    process.env.FAKE_CLAUDE_FAILS = fails;
+    process.env.FAKE_CLAUDE_LIST_DELAY = '3000';
+    try {
+      writeIn(repo, 'src/price.ts', 'export const unsent = true;\n');
+      await api.session.start({ kind: 'changes', scope: 'uncommitted', repo }, options);
+      await until(
+        () => state().activity === 'Connecting the review tools',
+        'Claude started, its tools connecting'
+      );
+      await api.session.end();
+      delete process.env.FAKE_CLAUDE_LIST_DELAY;
+
+      await api.session.resume();
+
+      await until(() => state().blocks.length > 0 && state().status === 'ready', 'the map');
+      assert.equal(readFileSync(fails, 'utf8'), '9', 'no resume tried');
+      assert.ok(
+        state().messages.some((message) => message.isAuto),
+        'the kickoff sent'
+      );
+    } finally {
+      delete process.env.FAKE_CLAUDE_FAILS;
+      delete process.env.FAKE_CLAUDE_LIST_DELAY;
+      rmSync(fails, { force: true });
+      gitIn(repo, 'reset', '-q', '--hard');
+    }
+  });
+
   it('GIVEN a question WHEN a tour starts THEN Claude draws stops, and a show cue opens the file itself', async () => {
     // The code as the previous test left it, but clean: the stops fit its files
     gitIn(repo, 'reset', '-q', '--hard');

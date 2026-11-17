@@ -610,8 +610,10 @@ export class ReviewSession implements vscode.Disposable {
     this.track(
       review.input.kind === 'changes' ? 'Reading your changes' : 'Checking the pull request'
     );
+    // Stopped before Claude got the kickoff (its tools still connecting): no conversation to resume
+    const isNew = isFresh || !this.state.messages.some((message) => message.role === 'user');
     try {
-      if (review.input.kind === 'tour') return await this.reopenTour(run, isFresh);
+      if (review.input.kind === 'tour') return await this.reopenTour(run, isFresh, isNew);
       // This window's checkout of the repository (a worktree, say), else where the review last ran
       const repo =
         this.here?.commonDir === review.commonDir ? this.here.repo : this.loaded.info.repo;
@@ -636,17 +638,17 @@ export class ReviewSession implements vscode.Disposable {
         this.state.pr = loaded.info;
         this.state.coverage = this.withViewed(this.state.coverage);
       }
-      if (isFresh) {
+      if (isNew) {
         Object.assign(this.state, { blocks: [], hotspots: [] });
         this.sessionId = randomUUID();
         this.pendingNotes = [];
-        this.note('A new Claude session: it prepares the review again.');
+        if (isFresh) this.note('A new Claude session: it prepares the review again.');
         prompt = kickoff(loaded.info, '', focusIn(review.input));
       } else if (focus) prompt = [prompt, focusOf(focus)].filter(Boolean).join(' ');
       this.touch();
       await this.server.listen();
       if (run !== this.run) return;
-      await this.launch(run, { isResume: !isFresh, prompt });
+      await this.launch(run, { isResume: !isNew, prompt });
     } catch (error) {
       if (run === this.run) this.fail(error);
     }
@@ -656,10 +658,10 @@ export class ReviewSession implements vscode.Disposable {
    * A tour goes on where it stopped: its stops stay on the code they were drawn on. A new Claude
    * session draws the tour again.
    */
-  private async reopenTour(run: number, isFresh: boolean) {
+  private async reopenTour(run: number, isFresh: boolean, isNew: boolean) {
     const loaded = this.loaded!;
     let prompt: string | undefined;
-    if (isFresh) {
+    if (isNew) {
       Object.assign(this.state, {
         files: [],
         hunks: {},
@@ -670,13 +672,13 @@ export class ReviewSession implements vscode.Disposable {
       });
       this.sessionId = randomUUID();
       this.pendingNotes = [];
-      this.note('A new Claude session: it draws the tour again.');
+      if (isFresh) this.note('A new Claude session: it draws the tour again.');
       prompt = kickoff(loaded.info, loaded.body);
     }
     this.touch();
     await this.server.listen();
     if (run !== this.run) return;
-    await this.launch(run, { isResume: !isFresh, prompt });
+    await this.launch(run, { isResume: !isNew, prompt });
   }
 
   /** Opens a kept review and goes on with its Claude session. */

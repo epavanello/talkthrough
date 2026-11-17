@@ -78,6 +78,8 @@ and webview, esbuild for the host, e2e in a real VS Code.
   still be closing in another window) is tried again after 1, 2, 4 and 8 s, then fails with "Try again"
   or "New Claude session" (`restart`: new session id, the kickoff again, chat and hunk states kept).
   `ptybridge.py` hangs up Claude's whole process group and kills it 3 s later; `deactivate()` waits.
+  A review with no user message yet (stopped before the kickoff was typed) has no conversation: a
+  resume launches it new (`isNew` in `reopen`), with the kickoff.
 - Bumped `run` counters drop the work of a start or resume that something newer replaced.
 
 ### New commits
