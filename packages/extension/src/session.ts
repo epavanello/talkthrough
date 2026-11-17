@@ -28,7 +28,7 @@ import {
   type ReviewSummary,
   type SessionStatus
 } from '@talkthrough/shared';
-import { changeCounts, changesHead, loadChanges, loadTour } from './changes';
+import { changeCounts, changesHead, currentBranch, loadChanges, loadTour } from './changes';
 import { checkoutHere, reviewWorktree } from './checkout';
 import { ClaudeProcess, claudeArgs } from './claude';
 import { cuesOf, parseReply } from './cues';
@@ -234,13 +234,17 @@ async function load(input: StartInput, repo: string) {
   return loadPr(repo, await parsePrRef(repo, input.pr));
 }
 
-/** A review's id: one per PR, per scope of your own changes; each tour its own. */
+/**
+ * A review's id: one per PR; a review of your changes and a tour, each its own, so starting one is
+ * always a new session (a kept one goes on from the start screen's list).
+ */
 function idOf(input: StartInput, commonDir: string, ref: PrRef | null) {
   if (input.kind === 'github' && ref)
     return `${commonDir}#${`${ref.owner}/${ref.name}`.toLowerCase()}#${ref.number}`;
   if (input.kind === 'local') return `${commonDir}#local#${input.number}`;
-  if (input.kind === 'changes') return `${commonDir}#changes#${input.scope}`;
-  return `${commonDir}#tour#${Date.now().toString(36)}`;
+  const time = Date.now().toString(36);
+  if (input.kind === 'changes') return `${commonDir}#changes#${input.scope}#${time}`;
+  return `${commonDir}#tour#${time}`;
 }
 
 /** What a start or resume says it is doing first. */
@@ -611,7 +615,12 @@ export class ReviewSession implements vscode.Disposable {
       // This window's checkout of the repository (a worktree, say), else where the review last ran
       const repo =
         this.here?.commonDir === review.commonDir ? this.here.repo : this.loaded.info.repo;
-      const loaded = await load(review.input, repo);
+      // Your changes on another branch than the review's: it stays on its snapshot, read-only
+      const isElsewhere =
+        review.input.kind === 'changes' && (await currentBranch(repo)) !== this.loaded.info.head;
+      const loaded = isElsewhere
+        ? { ...this.loaded, info: { ...this.loaded.info, repo, isLive: false } }
+        : await load(review.input, repo);
       const parsed = parsePatch(await prDiff(loaded.info));
       if (run !== this.run) return;
       const hasMoved = loaded.info.headSha !== this.loaded.info.headSha;
@@ -1855,6 +1864,9 @@ export class ReviewSession implements vscode.Disposable {
       const { input } = review;
       // A tour stays on the code it was drawn on
       if (input.kind === 'tour') return;
+      // Your changes are the branch's: another branch's are not new commits of this review
+      if (input.kind === 'changes' && (await currentBranch(loaded.info.repo)) !== loaded.info.head)
+        return;
       const sha =
         input.kind === 'changes'
           ? await changesHead(loaded.info.repo, input.scope)

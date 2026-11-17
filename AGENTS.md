@@ -71,7 +71,8 @@ and webview, esbuild for the host, e2e in a real VS Code.
 - `reviews.ts` keeps every review as one JSON file in the extension's global storage (`reviews/`), so
   each window writes only its own. A review's id is `<git common dir>#<owner/name>#<number>`: every
   worktree of a repository lists the same reviews (`state.reviews`, the start screen), and a PR with a
-  kept review goes on with it instead of starting over. workspaceState `talkthrough.open` is the review
+  kept review goes on with it instead of starting over. Your changes and tours get a time in their id:
+  starting one is always a new session, a kept one goes on from the list. workspaceState `talkthrough.open` is the review
   a window has open: a new window shows it `paused`, and Resume relaunches with `--resume`.
 - A resume that ends before Claude starts (an early exit, or "No conversation found": the session may
   still be closing in another window) is tried again after 1, 2, 4 and 8 s, then fails with "Try again"
@@ -96,8 +97,9 @@ and webview, esbuild for the host, e2e in a real VS Code.
 - `changes.ts` (vscode-free): a review that is not a PR stands on a snapshot, a commit on top of HEAD
   that no ref points to, written with a copy of the index (`GIT_INDEX_FILE`; `git add -A` for
   uncommitted work), fixed author and dates so the same changes make the same commit. `changes`
-  reviews: staged or uncommitted against HEAD, or the branch against `origin/HEAD`, main or master; one
-  kept per scope (`#changes#<scope>`), and `checkHead()` compares snapshots. `PrInfo.kind` says which
+  reviews: staged or uncommitted against HEAD, or the branch against `origin/HEAD`, main or master
+  (`#changes#<scope>#<time>`); `checkHead()` compares snapshots. On another branch than its own
+  (`PrInfo.head`), a kept one resumes on its snapshot (`isLive` off) and sees no new head. `PrInfo.kind` says which
   (`kindOf()`: missing is `pr`); worktree and checkout offers are for PRs only.
 - Both kinds, and PRs, have `git_log` and `git_show` (`logAt`, `showAt` in `pr.ts`: a revision that
   can't be an option, `--no-ext-diff --no-textconv`, no shell).

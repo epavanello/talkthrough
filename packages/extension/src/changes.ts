@@ -91,7 +91,8 @@ export async function changeCounts(repo: string): Promise<LocalChanges> {
   return { staged: lines(staged).length, uncommitted: lines(status).length, branch, base };
 }
 
-const currentBranch = (repo: string) =>
+/** The branch checked out, or `HEAD` when detached. */
+export const currentBranch = (repo: string) =>
   git(repo, 'symbolic-ref', '--quiet', '--short', 'HEAD').catch(() => 'HEAD');
 
 /** The head a review of your changes is on now: what to compare a kept one with. */

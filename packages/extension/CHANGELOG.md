@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1
+
+- Reviewing your changes (staged, uncommitted, this branch) always starts a new review, with a new
+  Claude session: it used to go on with the last one of that kind, even from another branch. A
+  review in progress goes on from the start screen's list.
+- A kept review of your changes opened from another branch stays on the changes it was drawn on,
+  instead of taking the branch checked out as new commits.
+
 ## 0.8.0
 
 - **One sentence at a time**, a toggle in the player: every play says one sentence and stops, ready

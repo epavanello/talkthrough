@@ -693,6 +693,47 @@ describe('Your own changes and tours', function () {
     );
   });
 
+  it('GIVEN a kept branch review WHEN another branch is reviewed THEN it starts fresh, and the kept one stays on its own', async () => {
+    gitIn(repo, 'reset', '-q', '--hard');
+    gitIn(repo, 'checkout', '-q', '-b', 'feature-a');
+    writeIn(repo, 'src/price.ts', 'export const resolvePrice = (total: number) => total;\n');
+    gitIn(repo, 'commit', '-qam', 'Price as is');
+    await api.session.start({ kind: 'changes', scope: 'branch', repo }, options);
+    await until(() => state().blocks.length > 0 && state().status === 'ready', 'the map of A');
+
+    gitIn(repo, 'checkout', '-q', 'main');
+    gitIn(repo, 'checkout', '-q', '-b', 'feature-b');
+    writeIn(repo, 'src/orders.ts', 'export const save = (total: number) => total;\n');
+    gitIn(repo, 'commit', '-qam', 'Orders as is');
+    await api.session.start({ kind: 'changes', scope: 'branch', repo }, options);
+    await until(() => state().blocks.length > 0 && state().status === 'ready', 'the map of B');
+
+    assert.equal(state().pr?.title, 'feature-b against main');
+    assert.deepEqual(
+      state().files.map((file) => file.path),
+      ['src/orders.ts']
+    );
+    assert.ok(
+      !state().messages.some((message) => message.text.includes('feature-a')),
+      'a new chat'
+    );
+
+    const first = state().reviews.find((review) => review.title === 'feature-a against main')!;
+    await api.session.openReview(first.id);
+    await until(
+      () => state().status === 'ready' && state().pr?.title === 'feature-a against main',
+      'review A again'
+    );
+    assert.deepEqual(
+      state().files.map((file) => file.path),
+      ['src/price.ts'],
+      'on its own snapshot, not the branch checked out'
+    );
+    assert.equal(state().pr?.isLive, false);
+    assert.equal(state().newHead, null);
+    gitIn(repo, 'checkout', '-q', 'main');
+  });
+
   it('GIVEN a question WHEN a tour starts THEN Claude draws stops, and a show cue opens the file itself', async () => {
     // The code as the previous test left it, but clean: the stops fit its files
     gitIn(repo, 'reset', '-q', '--hard');
