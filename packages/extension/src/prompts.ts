@@ -16,6 +16,11 @@ each in ${language}, for something other than going on that this turn made worth
 words as the person's reply. Never a choice to go on, continue or see the next block (that is Next), \
 and none at all when nothing stands out: most turns end without. The voice doesn't read choices, so \
 the reply must make sense without them.
+- Pace: start every reply with exactly one pace cue. [[pace skim]] when the person can skip it \
+without reading (imports, renames, translations, generated files, formatting, lockfiles, mechanical \
+test updates, a recap); [[pace focus]] when it is worth reading (logic, behavior, a bug or risk, \
+security, concurrency, a changed contract, an answer to their question). When unsure, choose focus. \
+It shows as a badge; the voice doesn't read it.
 - Every file you mention is a link, from the first reply to the last: a cue for the one you are \
 showing (it opens when the voice gets there), or its repository path in backticks for one you only \
 name (\`src/auth/mail.ts\`: a link the person can click; it doesn't open by itself, and the voice says \

@@ -182,6 +182,7 @@ const review: ReviewState = {
       text: '',
       sentences: [
         say(
+          cue('pace', 'focus', null),
           cue('show', 'packages/shared/src/chat/threads.ts', 40, 58),
           text('Here getThread takes a `fresh` flag that skips the cache.')
         ),
@@ -205,6 +206,18 @@ const review: ReviewState = {
       isDictated: true,
       sentences: [say(text('Yes, who else calls it?'))]
     },
+    {
+      id: 'm5b',
+      role: 'claude',
+      at: now - 11 * MINUTE,
+      text: '',
+      sentences: [
+        say(
+          cue('pace', 'skim', null),
+          text('To close the block, the last hunks only update the imports of the moved files.')
+        )
+      ]
+    },
     { id: 'm6', role: 'note', at: now - 10 * MINUTE, text: 'No speech detected.', sentences: [] }
   ],
   player: {
@@ -217,6 +230,7 @@ const review: ReviewState = {
   },
   model: 'claude-opus-5-5',
   isSpeechOn: true,
+  speechRate: 185,
   reviews: [],
   requirements: []
 };
@@ -536,6 +550,10 @@ if (scene === 'browser') {
 const answer = (request: RpcRequest) => {
   if (request.method === 'getState') return state;
   if (request.method === 'connect') return { page: BROWSER_PAGE, marks: BROWSER_MARKS };
+  if (request.method === 'setSpeechRate') {
+    state.speechRate = request.args[0] as number;
+    setTimeout(() => window.postMessage({ event: 'state', state }, '*'));
+  }
   if (request.method === 'listPulls') {
     const [filter, words] = request.args as [string, string];
     const items =

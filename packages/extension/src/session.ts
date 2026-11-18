@@ -26,7 +26,8 @@ import {
   type PrFile,
   type ReviewState,
   type ReviewSummary,
-  type SessionStatus
+  type SessionStatus,
+  SPEECH_RATE
 } from '@talkthrough/shared';
 import { changeCounts, changesHead, currentBranch, loadChanges, loadTour } from './changes';
 import { checkoutHere, reviewWorktree } from './checkout';
@@ -336,7 +337,7 @@ export class ReviewSession implements vscode.Disposable {
     this.player = new Player(
       new SaySpeaker(() => ({
         voice: config().get<string>('speech.voice', ''),
-        rate: config().get<number>('speech.rate', 185)
+        rate: this.state.speechRate
       })),
       (cue) => this.runCue(cue),
       () => {
@@ -360,6 +361,7 @@ export class ReviewSession implements vscode.Disposable {
       () => this.syncBrowser()
     );
     this.state.isSpeechOn = config().get<boolean>('speech.enabled', true);
+    this.state.speechRate = config().get<number>('speech.rate', SPEECH_RATE);
     this.state.choices = { model: config().get('model', ''), effort: config().get('effort', '') };
     // New commits on the PR: looked for every few minutes, and when the window gets focus
     this.headTimer = setInterval(() => void this.checkHead(), HEAD_INTERVAL);
@@ -473,10 +475,11 @@ export class ReviewSession implements vscode.Disposable {
 
   /** A review's state in place of the current one, keeping the window's (voice, model, lists). */
   private replaceState(fields: Partial<ReviewState>) {
-    const { isSpeechOn, choices, reviews, changes, requirements } = this.state;
+    const { isSpeechOn, speechRate, choices, reviews, changes, requirements } = this.state;
     this.state = {
       ...structuredClone(EMPTY_STATE),
       isSpeechOn,
+      speechRate,
       choices,
       reviews,
       changes,
@@ -1674,6 +1677,17 @@ export class ReviewSession implements vscode.Disposable {
     this.player.stop();
   }
 
+  /** Saves the voice's speed; a sentence being said goes on from where it is, at the new one. */
+  async setSpeechRate(rate: number) {
+    this.state.speechRate = rate;
+    this.changed();
+    if (this.state.player.isPlaying) {
+      this.player.pause();
+      this.player.resume();
+    }
+    await config().update('speech.rate', rate, vscode.ConfigurationTarget.Global);
+  }
+
   setSpeech(isOn: boolean) {
     this.state.isSpeechOn = isOn;
     if (!isOn) this.player.stop();
@@ -1682,8 +1696,8 @@ export class ReviewSession implements vscode.Disposable {
 
   /** A cue: the editor's, or the browser panel's (page, mark). */
   async runCue(cue: Cue) {
-    // A choice is the person's to click: nothing fires with the voice
-    if (cue.kind === 'choice') return;
+    // A choice is the person's to click, a pace a badge: nothing fires with the voice
+    if (cue.kind === 'choice' || cue.kind === 'pace') return;
     if (cue.kind !== 'page' && cue.kind !== 'mark') return this.stage.run(cue);
     // Paused, or after a reload: the browser comes back for a link clicked in the chat
     const browser = this.browser ?? (await this.browserReady());

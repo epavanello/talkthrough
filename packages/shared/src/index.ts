@@ -95,9 +95,29 @@ export interface Hotspot {
 
 /**
  * show, open and refs act on code; page opens the app in the browser panel, mark points at it;
- * choice is a reply the person can click, shown as a button under the message.
+ * choice is a reply the person can click, shown as a button under the message; pace says how much
+ * attention the message deserves (`[[pace skim]]`, `[[pace focus]]`), a badge on it.
  */
-export type CueKind = 'show' | 'open' | 'refs' | 'page' | 'mark' | 'choice';
+export type CueKind = 'show' | 'open' | 'refs' | 'page' | 'mark' | 'choice' | 'pace';
+
+/** The voice's normal speed, in words per minute: what 1× means. */
+export const SPEECH_RATE = 185;
+/** The speeds the player bar offers, as multiples of SPEECH_RATE. */
+export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+
+/** How much attention a reply asks for: skim (routine, safe to skip) or focus (read it closely). */
+export type Pace = 'skim' | 'focus';
+
+/** A reply's pace, from its first pace cue; null for an ordinary one. */
+export const paceOf = (sentences: Sentence[]): Pace | null => {
+  for (const sentence of sentences)
+    for (const part of sentence.parts)
+      if (part.type === 'cue' && part.cue.kind === 'pace') {
+        const pace = part.cue.path.toLowerCase();
+        if (pace === 'skim' || pace === 'focus') return pace;
+      }
+  return null;
+};
 
 /** A choice cue's words: `[[choice Show the R2 adapter]]`. */
 export const choiceText = (cue: Cue) => (cue.symbol ? `${cue.path} ${cue.symbol}` : cue.path);
@@ -240,6 +260,8 @@ export interface ReviewState {
   messages: ChatMessage[];
   player: PlayerState;
   isSpeechOn: boolean;
+  /** How fast the voice speaks, in words per minute (`talkthrough.speech.rate`). */
+  speechRate: number;
   isRecording: boolean;
   /** What is being dictated, as Claude's prompt shows it live. */
   draft: string;
@@ -325,6 +347,7 @@ export const EMPTY_STATE: ReviewState = {
     isSentenceBySentence: false
   },
   isSpeechOn: true,
+  speechRate: SPEECH_RATE,
   isRecording: false,
   draft: '',
   model: null,
@@ -409,6 +432,8 @@ export interface HostApi {
   replayLast(): Promise<void>;
   stopSpeech(): Promise<void>;
   setSpeech(isOn: boolean): Promise<void>;
+  /** Words per minute; a sentence being said goes on at the new speed. */
+  setSpeechRate(rate: number): Promise<void>;
   runCue(cue: Cue): Promise<void>;
   showHunk(id: string): Promise<void>;
   setHunks(ids: string[], state: HunkState): Promise<void>;

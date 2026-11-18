@@ -179,6 +179,14 @@ describe('systemPrompt', () => {
       expect(prompt).toContain('never close with an invitation to go on');
     }
   });
+
+  it('GIVEN any kind WHEN Claude replies THEN every reply carries a pace, skim or focus', () => {
+    for (const kind of ['pr', 'changes', 'tour'] as const) {
+      const prompt = systemPrompt('italian', false, kind);
+      expect(prompt).toContain('start every reply with exactly one pace cue');
+      expect(prompt).toContain('When unsure, choose focus');
+    }
+  });
 });
 
 describe('kickoff', () => {

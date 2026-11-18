@@ -1,4 +1,4 @@
-import { choiceText, type Sentence } from '@talkthrough/shared';
+import { choiceText, paceOf, type Sentence } from '@talkthrough/shared';
 import { describe, expect, it } from 'vitest';
 import { cuesOf, parseReply, speakable } from '../src/cues';
 
@@ -100,6 +100,20 @@ describe('choice cues', () => {
       'Chi lo chiama?'
     ]);
     expect(speakable(reply)).toBe('Lo upload è il pezzo migliore.');
+  });
+});
+
+describe('pace cues', () => {
+  it('GIVEN a routine reply WHEN parsed THEN its pace is skim, and the voice skips the cue', () => {
+    const reply = '[[pace skim]] Restano solo gli import dei file usati.';
+    expect(paceOf(parseReply(reply))).toBe('skim');
+    expect(speakable(reply)).toBe('Restano solo gli import dei file usati.');
+  });
+
+  it('GIVEN a reply without a pace cue, or an unknown one WHEN parsed THEN it has no pace', () => {
+    expect(paceOf(parseReply('Qui cambia il calcolo del prezzo.'))).toBeNull();
+    expect(paceOf(parseReply('[[pace meh]] Boh.'))).toBeNull();
+    expect(paceOf(parseReply('[[pace Focus]] Attento al lock.'))).toBe('focus');
   });
 });
 

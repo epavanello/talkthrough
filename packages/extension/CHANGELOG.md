@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Every reply of Claude carries a pace badge: 🥱 Skim for routine you can skip without reading
+  (imports, renames, translations), 🧐 Focus for what is worth reading.
+- A speed picker in the player bar (0.75× to 2×): the voice goes on at the new speed from where it
+  is, and the next reviews keep it.
+
 ## 0.8.2
 
 - A review stopped before Claude got to start it (closed, or the window reloaded while the review

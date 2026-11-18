@@ -165,6 +165,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     replayLast: async () => review.replayLast(),
     stopSpeech: async () => review.stopSpeech(),
     setSpeech: async (isOn) => review.setSpeech(isOn),
+    setSpeechRate: async (rate) => review.setSpeechRate(rate),
     runCue: (cue) =>
       review.runCue(cue).catch((error: Error) => {
         // What Claude would be told ("Ask the person to …") is said to the person plainly

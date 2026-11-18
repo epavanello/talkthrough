@@ -2,7 +2,7 @@
   "name": "talkthrough",
   "displayName": "Talkthrough — talk a PR review through with Claude",
   "description": "Review a pull request by talking it through with Claude Code: native diffs on your real files, short spoken turns, and a memory of what is clear.",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "publisher": "epavanello",
   "license": "MIT",
   "author": "Emanuele Pavanello",
@@ -217,7 +217,7 @@
         "talkthrough.speech.rate": {
           "type": "number",
           "default": 185,
-          "description": "Speaking rate, in words per minute."
+          "description": "Speaking rate, in words per minute (185 is 1×). The player bar's speed picker sets it."
         },
         "talkthrough.syncViewed": {
           "type": "boolean",

@@ -10,6 +10,7 @@
     Volume2,
     VolumeX
   } from '@lucide/svelte';
+  import { SPEECH_RATE, SPEEDS } from '@talkthrough/shared';
   import { app, shortcutOf } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
@@ -26,6 +27,13 @@
   const isOver = $derived(isLast && app.progress >= 1 && !player.isPlaying);
   /** The voice stops at the end of this sentence: a mark there on the bar. */
   const stops = $derived(player.isSentenceBySentence && !isLast);
+  /** Words per minute for each speed offered, and the current one if it is set to another. */
+  const rates = $derived(
+    [
+      ...new Set([...SPEEDS.map((speed) => Math.round(speed * SPEECH_RATE)), app.state.speechRate])
+    ].sort((a, b) => a - b)
+  );
+  const speedOf = (rate: number) => `${Number((rate / SPEECH_RATE).toFixed(2))}×`;
 </script>
 
 <div class="flex items-center gap-0.5 border-t px-2 py-1">
@@ -112,6 +120,18 @@
     </div>
   {/if}
   <div class="ml-auto flex items-center gap-0.5">
+    <select
+      class="h-5 rounded border border-input bg-input-background px-0.5 text-xs tabular-nums text-foreground outline-none focus:border-ring disabled:opacity-50"
+      aria-label="Voice speed"
+      title="Voice speed ({app.state.speechRate} words per minute)"
+      value={app.state.speechRate}
+      disabled={!canRead}
+      onchange={(event) => host.setSpeechRate(Number(event.currentTarget.value))}
+    >
+      {#each rates as rate (rate)}
+        <option value={rate}>{speedOf(rate)}</option>
+      {/each}
+    </select>
     <Button
       variant="ghost"
       size="icon-xs"
