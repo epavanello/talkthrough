@@ -57,14 +57,20 @@ and webview, esbuild for the host, e2e in a real VS Code.
 - Esc ends a turn with no Stop hook and puts the prompt back in the input: the session says
   "Interrupted." itself and Ctrl+U empties the input.
 - Stage cues (`[[show|open|refs path#Lx-y symbol]]`) are parsed in `cues.ts` and fired by the
-  player sentence by sentence. `[[choice words]]` fires nothing: the last reply's choices are buttons
+  player sentence by sentence: a sentence is one `say` (its text parts joined), and a cue inside it
+  fires as the voice reaches its offset, without holding the voice. `[[choice words]]` fires nothing: the last reply's choices are buttons
   that send their words (`choiceText`). A `show` cue marks the hunks it overlaps as explained.
+  A path in backticks that the repository has (`ChatMessage.paths`, from `codePaths`) is a link too, and
+  the player opens it beside as the voice says it (an `open` cue at its offset); other code stays code.
+  Paths are always whole, from the repository root (the prompt says so).
 - The voice is `say -i` (`SaySpeaker`): with a TERM it highlights each word as it says it, on a pipe
   too, and the player reads that as where the voice is (the place in the sentence). A word sends only
   a `progress` event (`onProgress`), never the whole state: a state message per word re-renders the
   webview and makes the voice stutter. `PlayerState.isWaiting`: playing, no word said yet;
   `isSentenceBySentence`: a mode, every play stops once its sentence is said, ready at the next one. Pause keeps the place; resume says the rest from the word before it. Back goes to the
   sentence's start first.
+  A reply that comes while the voice is saying another waits for it (`enqueue`): Next keeps the voice
+  (`send(NEXT, true)`, and `onPrompt` doesn't stop it for "Next"); any other prompt or stop drops the wait.
 
 ### Reviews kept
 
@@ -150,8 +156,13 @@ and webview, esbuild for the host, e2e in a real VS Code.
   connects, without the stage's tools. Its message is `isAuto`.
 - The start screen's **Goal** (`app.focus`) is a review's `focus` (`StartInput`, kept with
   the review: the kickoff's `Focus: …`, and a prompt of its own when a kept review goes on) or a
-  tour's question. `isPreparing` (shared): no map yet and Claude busy. Input waits meanwhile (the composer and
-  the host's `isWaitingForMap`), and the webview shows `state.trail`, the turn's steps.
+  tour's question. Under it, **Review: Full / Light** (`app.depth`, kept in the webview's state) is a
+  new review's `depth` (`StartInput`, kept with the review, `state.depth`): light gets its own
+  preparing in `systemPrompt(…, depth)`, and `mapProblems(…, isPartial)` lets its map leave hunks out.
+  `hunksInReview` (shared) is what coverage counts: a light review's mapped hunks; the map lists the
+  rest as "Outside the map" (`app.filesOutside`), and Claude adds one with set_map again.
+  `isPreparing` (shared): no map yet and Claude busy. Input waits meanwhile (the composer and the
+  host's `isWaitingForMap`), and the webview shows `state.trail`, the turn's steps.
 - Hooks don't run in a folder Claude Code doesn't trust: its trust dialog shows on the screen
   (`dialog: 'trust'`), and `trustFolder()` moves its menu to "Yes" and presses Enter.
 - `checkout.ts`: a review worktree (`git worktree add --detach <main>/.claude/worktrees/pr-<n>
@@ -184,7 +195,7 @@ packages/
                             Messages, PlayerBar, Composer, Shortcuts, Tip; BrowserApp.svelte is
                             the panel
     preview/                the panel in a browser on a mocked host: ?scene=home|setup|preparing|
-                            review|update|browser|trust|recording|tour|error, &theme=light,
+                            review|light|update|browser|trust|recording|tour|error, &theme=light,
                             &width=280, &voice=off
 docs/          README images and the icon's source
 ```

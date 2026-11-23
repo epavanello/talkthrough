@@ -107,7 +107,7 @@ export const TOOLS: ToolSpec[] = [
   {
     name: 'set_map',
     description:
-      'Sets the review map: blocks of hunks in the order of the application flow (every hunk in exactly one block), and hotspots worth exploring. Answers with the problems to fix, if any.',
+      'Sets the review map: blocks of hunks in the order of the application flow (every hunk in exactly one block; in a light review, only the hunks worth going through, each in one block), and hotspots worth exploring. Answers with the problems to fix, if any.',
     inputSchema: object(
       {
         blocks: {
@@ -297,7 +297,8 @@ export interface MapInput {
 }
 
 /** What is wrong with a map: unknown, repeated or missing hunk ids. */
-export function mapProblems(map: MapInput, hunkIds: string[]) {
+/** What is wrong with a map; `isPartial` (a light review) lets it leave hunks out. */
+export function mapProblems(map: MapInput, hunkIds: string[], isPartial = false) {
   const known = new Set(hunkIds);
   const seen = new Map<string, string>();
   const problems: string[] = [];
@@ -308,6 +309,10 @@ export function mapProblems(map: MapInput, hunkIds: string[]) {
         problems.push(`${id} is in both "${seen.get(id)}" and "${block.title}".`);
       else seen.set(id, block.title);
     }
+  }
+  if (isPartial) {
+    if (!seen.size) problems.push('The map has no hunks.');
+    return problems;
   }
   const missing = hunkIds.filter((id) => !seen.has(id));
   if (missing.length) problems.push(`Not in any block: ${missing.join(', ')}.`);

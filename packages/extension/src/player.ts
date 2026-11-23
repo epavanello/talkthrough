@@ -5,7 +5,7 @@
  */
 import { spawn } from 'node:child_process';
 import type { ChatMessage, Cue, PlayerState, Sentence } from '@talkthrough/shared';
-import { speakable } from './cues';
+import { codeRefs, speakable } from './cues';
 
 export interface Speaker {
   /**
@@ -67,25 +67,45 @@ export class SaySpeaker implements Speaker {
   }
 }
 
-/** A place in a sentence: one of its parts, and an offset in that part's spoken words. */
-interface Place {
-  part: number;
-  offset: number;
+/**
+ * A sentence as the voice says it: its words in one piece (one `say`, so a cue in the middle doesn't
+ * break the sentence's intonation), and each cue at the offset in them where it stands. A path in
+ * code that is a file of the repository (`paths`) opens beside as the voice says it, as a cue would.
+ */
+function spokenOf(sentence: Sentence, paths: string[] = []) {
+  let text = '';
+  const cues: { cue: Cue; at: number }[] = [];
+  for (const part of sentence.parts) {
+    if (part.type === 'cue') cues.push({ cue: part.cue, at: text.length });
+    else if (part.type === 'text') {
+      const words = speakable(part.text);
+      if (!words) continue;
+      const start = text ? text.length + 1 : 0;
+      for (const ref of codeRefs(part.text)) {
+        if (!paths.includes(ref.path)) continue;
+        const before = speakable(part.text.slice(0, ref.index));
+        const cue: Cue = {
+          kind: 'open',
+          path: ref.path,
+          start: ref.line,
+          end: ref.line,
+          symbol: null
+        };
+        cues.push({
+          cue,
+          at: Math.min(start + before.length + (before ? 1 : 0), start + words.length)
+        });
+      }
+      text += (text ? ' ' : '') + words;
+    }
+  }
+  return { text, cues };
 }
 
-const START: Place = { part: 0, offset: 0 };
-
-/** What each part of a sentence says aloud ('' for cues and code). */
-const wordsOf = (sentence: Sentence) =>
-  sentence.parts.map((part) => (part.type === 'text' ? speakable(part.text) : ''));
-
-/** How far `place` is through the sentence's spoken words, 0 to 1. */
-function progressAt(sentence: Sentence, place: Place) {
-  const words = wordsOf(sentence);
-  const total = words.reduce((sum, one) => sum + one.length, 0);
-  if (!total) return 0;
-  const done = words.slice(0, place.part).reduce((sum, one) => sum + one.length, 0);
-  return Math.min(1, (done + place.offset) / total);
+/** How far `offset` is through the sentence's spoken words, 0 to 1. */
+function progressAt(sentence: Sentence, offset: number) {
+  const { text } = spokenOf(sentence);
+  return text.length ? Math.min(1, offset / text.length) : 0;
 }
 
 /** The word before the one at `offset`: a resume starts there, so no word is cut in half. */
@@ -99,10 +119,12 @@ export class Player {
   private message: ChatMessage | null = null;
   /** The last play only fired cues (voice off): resume and seek do the same. */
   private isSilent = false;
-  /** Where the voice is in the current sentence; a pause keeps it. */
-  private place: Place = START;
+  /** Where the voice is in the current sentence's spoken words; a pause keeps it. */
+  private place = 0;
   /** How far `place` is through the sentence, 0 to 1. */
   private progress = 0;
+  /** Replies that came while the voice was saying another: each is read once the one before ends. */
+  private queue: { message: ChatMessage; isSilent: boolean }[] = [];
   state: PlayerState = {
     messageId: null,
     sentence: 0,
@@ -124,7 +146,7 @@ export class Player {
   ) {}
 
   /** Reads `message` from sentence `from` (at `place` in it); `isSilent` only fires its cues. */
-  play(message: ChatMessage, from = 0, isSilent = false, place = START) {
+  play(message: ChatMessage, from = 0, isSilent = false, place = 0) {
     this.controller?.abort();
     const controller = new AbortController();
     this.controller = controller;
@@ -139,19 +161,28 @@ export class Player {
     );
   }
 
+  /**
+   * A new reply: read now, or, while the voice is saying another, once it ends, so Next never cuts
+   * the voice short.
+   */
+  enqueue(message: ChatMessage, isSilent = false) {
+    if (this.state.isPlaying && !isSilent) this.queue.push({ message, isSilent });
+    else this.play(message, 0, isSilent);
+  }
+
   private async read(
     message: ChatMessage,
     from: number,
     controller: AbortController,
     isSilent: boolean,
-    start: Place
+    start: number
   ) {
     const { signal } = controller;
     for (let index = from; index < message.sentences.length; index++) {
       if (signal.aborted) return;
       const sentence = message.sentences[index];
-      const words = wordsOf(sentence);
-      const first = index === from ? start : START;
+      const { text, cues } = spokenOf(sentence, message.paths);
+      const first = index === from ? start : 0;
       this.place = first;
       this.progress = progressAt(sentence, first);
       this.set({
@@ -163,31 +194,39 @@ export class Player {
         isWaiting: !isSilent && (index === from || this.state.isWaiting),
         isSentenceBySentence: this.state.isSentenceBySentence
       });
-      const at = (place: Place) => {
-        this.place = place;
-        this.progress = progressAt(sentence, place);
-        if (this.state.isWaiting) this.set({ ...this.state, isWaiting: false });
-        this.onProgress(this.progress);
-      };
-      // A resume goes on from its part: the cues before it already fired
-      for (let part = first.part; part < sentence.parts.length; part++) {
-        if (signal.aborted) return;
-        const one = sentence.parts[part];
-        if (one.type === 'cue') await this.runCue(one.cue).catch(() => {});
-        else if (one.type === 'text' && !isSilent) {
-          const offset = part === first.part ? first.offset : 0;
-          const rest = words[part].slice(offset);
-          if (rest.trim())
-            await this.speaker.speak(rest, signal, (said) => {
-              if (!signal.aborted) at({ part, offset: offset + said });
-            });
+      // A resume goes on from its place: the cues before it already fired
+      const pending = cues.filter((one) => one.at >= first);
+      // In order, one after the other; a cue inside the sentence doesn't hold the voice
+      let chain = Promise.resolve();
+      const fire = (upTo: number) => {
+        while (pending.length && pending[0].at <= upTo) {
+          const { cue } = pending.shift()!;
+          chain = chain.then(() => (signal.aborted ? undefined : this.runCue(cue).catch(() => {})));
         }
+        return chain;
+      };
+      const rest = text.slice(first);
+      if (isSilent || !rest.trim()) await fire(Infinity);
+      else {
+        // The cues before the first word open the sentence: the editor changes, then the voice
+        await fire(first + rest.search(/\S/));
         if (signal.aborted) return;
+        await this.speaker.speak(rest, signal, (said) => {
+          if (signal.aborted) return;
+          this.place = first + said;
+          this.progress = progressAt(sentence, this.place);
+          if (this.state.isWaiting) this.set({ ...this.state, isWaiting: false });
+          this.onProgress(this.progress);
+          void fire(this.place);
+        });
+        if (signal.aborted) return;
+        await fire(Infinity);
       }
+      if (signal.aborted) return;
       // One sentence at a time: ready at the next one, which Play reads
       if (this.state.isSentenceBySentence && !isSilent && index < message.sentences.length - 1) {
         this.controller = null;
-        this.place = START;
+        this.place = 0;
         this.progress = 0;
         this.set({
           ...this.state,
@@ -201,7 +240,7 @@ export class Player {
     }
     if (signal.aborted) return;
     this.controller = null;
-    this.place = START;
+    this.place = 0;
     this.progress = 1;
     this.set({
       ...this.state,
@@ -211,6 +250,8 @@ export class Player {
       progress: 1,
       isWaiting: false
     });
+    const next = this.queue.shift();
+    if (next) this.play(next.message, 0, next.isSilent);
   }
 
   /** Stops the voice where it is: resume goes on from there. */
@@ -234,8 +275,7 @@ export class Player {
     if (!this.message) return;
     const sentence = this.message.sentences[this.state.sentence];
     if (!sentence || this.progress >= 1) return this.play(this.message, 0, this.isSilent);
-    const words = wordsOf(sentence)[this.place.part] ?? '';
-    const place = { part: this.place.part, offset: wordBefore(words, this.place.offset) };
+    const place = wordBefore(spokenOf(sentence).text, this.place);
     this.play(this.message, this.state.sentence, this.isSilent, place);
   }
 
@@ -259,7 +299,9 @@ export class Player {
       this.set({ ...this.state, isSentenceBySentence: isOn });
   }
 
+  /** Stops the voice and drops the replies waiting for it. */
   stop() {
+    this.queue = [];
     this.controller?.abort();
     this.controller = null;
     if (this.state.isPlaying)

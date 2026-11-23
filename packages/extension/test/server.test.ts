@@ -93,4 +93,13 @@ describe('mapProblems', () => {
       'Not in any block: H2.'
     ]);
   });
+
+  it('GIVEN a light review WHEN hunks are left out THEN the map is fine, but never empty', () => {
+    expect(mapProblems({ blocks: [{ title: 'A', hunks: ['H1'] }] }, ['H1', 'H2'], true)).toEqual(
+      []
+    );
+    expect(mapProblems({ blocks: [{ title: 'A', hunks: [] }] }, ['H1'], true)).toEqual([
+      'The map has no hunks.'
+    ]);
+  });
 });

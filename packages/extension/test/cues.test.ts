@@ -1,6 +1,6 @@
 import { choiceText, paceOf, type Sentence } from '@talkthrough/shared';
 import { describe, expect, it } from 'vitest';
-import { cuesOf, parseReply, speakable } from '../src/cues';
+import { codePaths, cuesOf, parseReply, speakable } from '../src/cues';
 
 /** A sentence as plain text, cues left out. */
 const plainText = (sentence: Sentence) =>
@@ -120,8 +120,34 @@ describe('pace cues', () => {
 describe('speakable', () => {
   it('GIVEN markdown, code and links WHEN made speakable THEN only the words remain', () => {
     expect(speakable('**Attenzione**: `src/lib/price.ts` usa [questo](https://x.y) - ok')).toBe(
-      'Attenzione: price.ts usa questo - ok'
+      'Attenzione: price usa questo - ok'
     );
     expect(speakable('Vedi [[show a/b(c.ts#L2]] qui')).toBe('Vedi qui');
+  });
+
+  it('GIVEN file names in code WHEN made speakable THEN no dot is left for the voice to read', () => {
+    expect(speakable('Nel `.env` nuovo scrive')).toBe('Nel env nuovo scrive');
+    expect(speakable('In `scripts/migrate.mts` e `.env.example`')).toBe('In migrate e env example');
+    expect(speakable('Chiama `config.load()` poi `x`')).toBe('Chiama config load() poi x');
+  });
+
+  it('GIVEN dots and colons inside words WHEN made speakable THEN they become spaces; a sentence colon and a time stay', () => {
+    expect(speakable('Il comando talkthrough:next apre chat.ts')).toBe(
+      'Il comando talkthrough next apre chat ts'
+    );
+    expect(speakable('Usa `std::fs::read` e `foo:bar`')).toBe('Usa std fs read e foo bar');
+    expect(speakable('Nota: alle 10:30 parte. Poi basta.')).toBe(
+      'Nota: alle 10:30 parte. Poi basta.'
+    );
+  });
+});
+
+describe('codePaths', () => {
+  it('GIVEN a reply with code WHEN read THEN only paths, without line or ./, once each', () => {
+    expect(
+      codePaths(
+        'See `infra/services.ts:250`, `./a.ts`, `services.ts`, `ARIA_MONGO_URI` and `infra/services.ts`.'
+      )
+    ).toEqual(['infra/services.ts', 'a.ts', 'services.ts']);
   });
 });

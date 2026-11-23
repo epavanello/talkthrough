@@ -40,10 +40,10 @@ const until = async (check: () => boolean) => {
 
 function setup() {
   const speaker = new FakeSpeaker();
-  const seen = { changes: 0, progress: 0 };
+  const seen = { changes: 0, progress: 0, cues: [] as string[] };
   const player = new Player(
     speaker,
-    async () => {},
+    async (cue) => void seen.cues.push(`${cue.kind} ${cue.path}:${cue.start}`),
     () => seen.changes++,
     (progress) => (seen.progress = progress)
   );
@@ -51,6 +51,63 @@ function setup() {
 }
 
 describe('Player', () => {
+  it('GIVEN a reply naming files in code WHEN read THEN the real ones open as the voice says them', async () => {
+    const { speaker, player, seen } = setup();
+    const reply: ChatMessage = {
+      ...message,
+      paths: ['infra/services.ts'],
+      sentences: [
+        {
+          parts: [
+            {
+              type: 'text',
+              text: 'Uno due tre quattro cinque sei sette otto `infra/services.ts:250` nove `process.env` dieci.'
+            }
+          ]
+        }
+      ]
+    };
+    const opened: number[] = [];
+    player.play(reply);
+    await until(() => {
+      if (seen.cues.length && !opened.length) opened.push(seen.progress);
+      return !player.state.isPlaying && speaker.said.length === 1;
+    });
+    expect(seen.cues).toEqual(['open infra/services.ts:250']);
+    expect(opened[0]).toBeGreaterThan(0.5);
+  });
+
+  it('GIVEN the voice reading a reply WHEN another comes THEN it is read once the first ends; stop drops it', async () => {
+    const { speaker, player } = setup();
+    const second: ChatMessage = {
+      ...message,
+      id: 'm2',
+      sentences: [{ parts: [{ type: 'text', text: 'Nove dieci.' }] }]
+    };
+    player.play(message);
+    await until(() => speaker.said.length === 1);
+
+    player.enqueue(second);
+    expect(player.state).toMatchObject({ messageId: 'm1', isPlaying: true });
+    await until(() => player.state.messageId === 'm2');
+    expect(speaker.said).toEqual(['Uno due tre quattro cinque sei.', 'Sette otto.', 'Nove dieci.']);
+    await until(() => !player.state.isPlaying);
+
+    player.play(message);
+    player.enqueue(second);
+    player.stop();
+    await wait(300);
+    expect(player.state.messageId).toBe('m1');
+  });
+
+  it('GIVEN the voice quiet WHEN a reply comes THEN it is read at once', async () => {
+    const { speaker, player } = setup();
+    player.enqueue(message);
+    await until(() => speaker.said.length === 1);
+    expect(player.state).toMatchObject({ messageId: 'm1', isPlaying: true });
+    player.stop();
+  });
+
   it('GIVEN a sentence half read WHEN paused and resumed THEN it goes on from the word before, its progress held', async () => {
     const { speaker, player, seen } = setup();
     player.play(message);
@@ -123,6 +180,35 @@ describe('Player', () => {
     player.play(message);
     await until(() => speaker.said.length === 4);
     expect(speaker.said.slice(2)).toEqual(['Uno due tre quattro cinque sei.', 'Sette otto.']);
+  });
+
+  it('GIVEN a cue in the middle of a sentence WHEN played THEN the sentence is said in one piece and the cue fires as the voice gets there', async () => {
+    const speaker = new FakeSpeaker();
+    const fired: { path: string; words: number }[] = [];
+    let words = 0;
+    const cue = { kind: 'open' as const, path: '.env', start: null, end: null, symbol: null };
+    const player = new Player(
+      speaker,
+      async (one) => void fired.push({ path: one.path, words }),
+      () => {},
+      () => words++
+    );
+    player.play({
+      ...message,
+      sentences: [
+        {
+          parts: [
+            { type: 'text', text: 'Nel' },
+            { type: 'cue', cue },
+            { type: 'text', text: 'nuovo scrive.' }
+          ]
+        }
+      ]
+    });
+
+    await until(() => !player.state.isPlaying);
+    expect(speaker.said).toEqual(['Nel nuovo scrive.']);
+    expect(fired).toEqual([{ path: '.env', words: 2 }]);
   });
 
   it('GIVEN the last sentence WHEN next THEN nothing happens', async () => {

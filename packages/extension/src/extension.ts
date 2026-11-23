@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { reviewName, type ChangeScope, type HostApi } from '@talkthrough/shared';
+import { reviewName, type ChangeScope, type Depth, type HostApi } from '@talkthrough/shared';
 import { RevisionProvider, SCHEME } from './diff';
 import { githubRepo, searchPulls } from './github';
 import { ReviewSession, findRepo, type StartOptions } from './session';
@@ -29,7 +29,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
     void vscode.window.showErrorMessage(`Talkthrough: ${(error as Error).message}`);
   };
 
-  const start = async (pr: string, focus?: string) => {
+  const start = async (pr: string, focus?: string, depth?: Depth) => {
     const value =
       pr.trim() ||
       (await vscode.window.showInputBox({
@@ -40,10 +40,10 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       }));
     if (!value) return;
     await focusChat();
-    await review.start({ kind: 'github', pr: value, focus });
+    await review.start({ kind: 'github', pr: value, focus, depth });
   };
 
-  const reviewChanges = async (scope?: ChangeScope, focus?: string) => {
+  const reviewChanges = async (scope?: ChangeScope, focus?: string, depth?: Depth) => {
     const picked =
       scope ??
       (
@@ -70,7 +70,7 @@ export function activate(ctx: vscode.ExtensionContext): TalkthroughApi {
       )?.scope;
     if (!picked) return;
     await focusChat();
-    await review.start({ kind: 'changes', scope: picked, focus });
+    await review.start({ kind: 'changes', scope: picked, focus, depth });
   };
 
   const startTour = async (question: string) => {

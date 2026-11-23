@@ -49,6 +49,12 @@ export type ReviewKind = 'pr' | 'changes' | 'tour';
 /** Your own changes: staged ones, everything uncommitted, or the whole branch against its base. */
 export type ChangeScope = 'staged' | 'uncommitted' | 'branch';
 
+/**
+ * How much of a review Claude goes through: every hunk (full), or the files that matter for the
+ * goal (light), the others left outside the map.
+ */
+export type Depth = 'full' | 'light';
+
 /** How many files each scope of your own changes holds now: what the start screen offers. */
 export interface LocalChanges {
   staged: number;
@@ -157,6 +163,11 @@ export interface ChatMessage {
   isDictated?: boolean;
   /** Sent by Talkthrough rather than the person: the kickoff, the news of new commits. */
   isAuto?: boolean;
+  /**
+   * The paths Claude wrote in backticks that the repository has: links, opened as the voice gets
+   * there. Any other code stays code.
+   */
+  paths?: string[];
 }
 
 export interface PlayerState {
@@ -250,6 +261,8 @@ export interface ReviewState {
   /** The dialog Claude shows in its terminal while `waiting`. */
   dialog: 'trust' | 'other' | null;
   pr: PrInfo | null;
+  /** A review's depth (a tour's is full). */
+  depth: Depth;
   files: PrFile[];
   hunks: Record<string, Hunk>;
   coverage: Record<string, HunkState>;
@@ -331,6 +344,7 @@ export const EMPTY_STATE: ReviewState = {
   trail: [],
   dialog: null,
   pr: null,
+  depth: 'full',
   files: [],
   hunks: {},
   coverage: {},
@@ -362,6 +376,16 @@ export const EMPTY_STATE: ReviewState = {
 
 export const kindOf = (pr: { kind?: ReviewKind } | null) => pr?.kind ?? 'pr';
 
+/** The hunks a review goes through: a light one's, those of its map once drawn; else all. */
+export const hunksInReview = (review: {
+  depth?: Depth;
+  hunks: Record<string, unknown>;
+  blocks: { hunks: string[] }[];
+}) =>
+  review.depth === 'light' && review.blocks.length
+    ? review.blocks.flatMap((block) => block.hunks)
+    : Object.keys(review.hunks);
+
 /** A review as a sentence names it: `the review of PR #943`, `the tour “How sign-up works”`. */
 export function reviewName(review: { kind?: ReviewKind; number: number; title: string }) {
   const kind = kindOf(review);
@@ -380,13 +404,14 @@ export interface HostApi {
   getState(): Promise<ReviewState>;
   /**
    * A PR number or URL; empty asks for one. A PR with a kept review goes on with it. `focus`: what
-   * the person wants to know above all ("could anything break?"), told to Claude.
+   * the person wants to know above all ("could anything break?"), told to Claude. `depth`: for a
+   * new review (a kept one keeps its own).
    */
-  start(pr: string, focus?: string): Promise<void>;
+  start(pr: string, focus?: string, depth?: Depth): Promise<void>;
   /** The open pull requests of a list, narrowed by search text. */
   listPulls(filter: PullFilter, text: string): Promise<PullList>;
   /** A review of your own changes; one kept for the same scope goes on with them. */
-  reviewChanges(scope: ChangeScope, focus?: string): Promise<void>;
+  reviewChanges(scope: ChangeScope, focus?: string, depth?: Depth): Promise<void>;
   /** A guided tour of how something works, from a question ("how does sign-up work?"). */
   startTour(question: string): Promise<void>;
   /** Opens a kept review and goes on with its Claude session. */

@@ -1,5 +1,5 @@
 /** What the review session is told: how a turn works, the stage cues, preparing. vscode-free. */
-import type { PrInfo, ReviewKind } from '@talkthrough/shared';
+import type { Depth, PrInfo, ReviewKind } from '@talkthrough/shared';
 
 const turns = (language: string) => `\
 - One short turn: 1 to 3 sentences, at most about 60 words, then stop. Never chain topics or go on \
@@ -23,16 +23,23 @@ security, concurrency, a changed contract, an answer to their question). When un
 It shows as a badge; the voice doesn't read it.
 - Every file you mention is a link, from the first reply to the last: a cue for the one you are \
 showing (it opens when the voice gets there), or its repository path in backticks for one you only \
-name (\`src/auth/mail.ts\`: a link the person can click; it doesn't open by itself, and the voice says \
-only its name). Never a bare path.`;
+name (\`src/auth/mail.ts\`: a link the person can click; it opens beside as the voice says its name, \
+the only part of it the voice says). Never a bare path. A path, in a cue or in backticks, is always the whole path from the \
+repository root, never the file name alone: \`infra/services.ts\`, not \`services.ts\` (that is no file, \
+and no link).`;
 
 /** What Claude is told: a review of a PR or of the person's own changes, or a tour. */
-export const systemPrompt = (language: string, hasBrowser = false, kind: ReviewKind = 'pr') =>
+export const systemPrompt = (
+  language: string,
+  hasBrowser = false,
+  kind: ReviewKind = 'pr',
+  depth: Depth = 'full'
+) =>
   kind === 'tour'
     ? tourPrompt(language, hasBrowser)
-    : reviewPrompt(language, hasBrowser, kind === 'changes');
+    : reviewPrompt(language, hasBrowser, kind === 'changes', depth === 'light');
 
-const reviewPrompt = (language: string, hasBrowser: boolean, isOwn: boolean) => `\
+const reviewPrompt = (language: string, hasBrowser: boolean, isOwn: boolean, isLight: boolean) => `\
 You are running inside Talkthrough, a VS Code extension that turns ${isOwn ? "the review of the person's own changes (not a pull request yet: staged, uncommitted, or a whole branch)" : 'a pull request review'} into a \
 spoken, turn-based conversation. The person listens to your replies (text to speech) and reads them \
 in a chat; they answer by voice or text. VS Code is your stage: the extension opens native diffs and \
@@ -57,16 +64,7 @@ since the previous Next as ok. When they say by voice that it is clear, call mar
 hunks and the next ones in logical order. "This" means what that block says is on screen.
 
 Preparing (the first turn only)
-1. Call pr_overview, then pr_diff (by paths when the PR is large), and read what you need \
-(pr_file, pr_search, find_references, Read).
-2. Call set_map: every hunk in exactly one block, blocks in the order of the application flow \
-(schema and data, shared domain, workers, server routes, client logic, UI, i18n, docs and config; \
-tests right after their code), never alphabetical. Mechanical hunks (translations, generated files, \
-renames) get blocks of their own. Add hotspots: related problems worth exploring (callers not \
-updated, missing guards or tests, changed behaviour${isOwn ? ', leftover debug code or TODOs' : ''}), each with the evidence you found and \
-anchors.
-3. Reply with one or two sentences: what the PR does and how many blocks it has. Then stop: do not \
-explain a block before you are asked.
+${preparing(isOwn, isLight)}
 - A prompt may name a focus ("Focus: could anything break?"): what the person wants to know above \
 all, at the start or later. Look into it first, put what you find among the hotspots, and answer it \
 in a sentence of your reply (after what the PR does, when preparing).
@@ -77,8 +75,36 @@ order in one short turn, showing its hunks with cues; a large block can take sev
 - Questions: answer what was asked, about what is on screen unless said otherwise. Look things up \
 with pr_search (who calls it, where a route or a string is used), find_references, pr_file, Read, \
 and git_log or git_show for the history, \
-and show what you talk about with cues. There is no shell in this session: Bash is denied.
+and show what you talk about with cues. There is no shell in this session: Bash is denied.${isLight ? LIGHT_LATER : ''}
 - The review is read-only: never edit files or post to GitHub.${hasBrowser ? BROWSER : ''}`;
+
+/** The first turn: read the PR, draw the map (every hunk, or a light review's few), say so. */
+const preparing = (isOwn: boolean, isLight: boolean) => `\
+${
+  isLight
+    ? `This is a light review: the person chose not to go through every hunk. Pick what is worth it, \
+the others stay listed outside the map, where the person can open them or ask for them.
+1. Call pr_overview and read the description. Choose the files that matter for the focus (without \
+one, for what the PR does) and read their diff with pr_diff by paths, and whatever else you need \
+(pr_file, pr_search, find_references, Read). How many is up to you and the focus: most of a small PR, \
+a few vertical files of a large one. Never read lockfiles, generated files or snapshots.
+2. Call set_map with the hunks worth going through, each in one block,`
+    : `1. Call pr_overview, then pr_diff (by paths when the PR is large), and read what you need \
+(pr_file, pr_search, find_references, Read).
+2. Call set_map: every hunk in exactly one block,`
+} blocks in the order of the application flow \
+(schema and data, shared domain, workers, server routes, client logic, UI, i18n, docs and config; \
+tests right after their code), never alphabetical.${isLight ? '' : ' Mechanical hunks (translations, generated files, renames) get blocks of their own.'} \
+Add hotspots: related problems worth exploring (callers not \
+updated, missing guards or tests, changed behaviour${isOwn ? ', leftover debug code or TODOs' : ''}), each with the evidence you found and \
+anchors.
+3. Reply with one or two sentences: what the PR does and how many blocks it has${isLight ? ', and how many of its files the map leaves out' : ''}. Then stop: do not \
+explain a block before you are asked.`;
+
+/** A light review, once the map is drawn: what is outside it comes in when asked for. */
+const LIGHT_LATER = `
+- Outside the map (a light review): when the person asks about a file left out, or to add it, read \
+it and call set_map again with its hunks in a block where they fit.`;
 
 /** A review of the person's own changes: the tools still speak of a PR. */
 const OWN = `

@@ -172,6 +172,16 @@ describe('systemPrompt', () => {
     expect(systemPrompt('italian')).not.toContain("person's own changes");
   });
 
+  it('GIVEN a light review WHEN Claude prepares THEN it maps what matters and leaves the rest out', () => {
+    const light = systemPrompt('italian', false, 'pr', 'light');
+    expect(light).toContain('This is a light review');
+    expect(light).toContain('Never read lockfiles');
+    expect(light).toContain('Outside the map');
+    expect(light).not.toContain('every hunk in exactly one block');
+    expect(systemPrompt('italian')).toContain('every hunk in exactly one block');
+    expect(systemPrompt('italian')).not.toContain('light review');
+  });
+
   it('GIVEN any kind WHEN a turn ends THEN going on is left to Next, never a choice or an invitation', () => {
     for (const kind of ['pr', 'changes', 'tour'] as const) {
       const prompt = systemPrompt('italian', false, kind);

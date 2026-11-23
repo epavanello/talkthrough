@@ -93,10 +93,11 @@
    * A repository path written as code (`src/a.ts`, `src/a.ts:40`) rather than as a cue: still a link
    * that opens it.
    */
-  const fileOf = (code: string): Cue | null => {
+  const fileOf = (code: string, paths?: string[]): Cue | null => {
     const match = code.match(/^(.+?)(?::(\d+))?$/);
     const path = match?.[1].replace(/^\.?\//, '') ?? '';
-    if (!isFilePath(path)) return null;
+    // A reply says which of its paths are files; an older one, nothing
+    if (!isFilePath(path) || (paths && !paths.includes(path))) return null;
     const start = match?.[2] ? Number(match[2]) : null;
     return { kind: 'open', path, start, end: start, symbol: null };
   };
@@ -189,10 +190,10 @@
 
 <!-- Kept on one line: whitespace between these tags would show as extra spaces in the sentence -->
 <!-- prettier-ignore -->
-{#snippet inline(text: string)}{#each text.split(/(`[^`]+`)/g) as piece, at (at)}{#if piece.length > 2 && piece.startsWith('`') && piece.endsWith('`')}{@const file = fileOf(piece.slice(1, -1))}{#if file}{@render chip(file)}{:else}<code class="rounded bg-muted px-1 font-mono text-[0.9em]">{piece.slice(1, -1)}</code>{/if}{:else}{piece.replace(/\*\*|__/g, '')}{/if}{/each}{/snippet}
+{#snippet inline(text: string, paths?: string[])}{#each text.split(/(`[^`]+`)/g) as piece, at (at)}{#if piece.length > 2 && piece.startsWith('`') && piece.endsWith('`')}{@const file = fileOf(piece.slice(1, -1), paths)}{#if file}{@render chip(file)}{:else}<code class="rounded bg-muted px-1 font-mono text-[0.9em]">{piece.slice(1, -1)}</code>{/if}{:else}{piece.replace(/\*\*|__/g, '')}{/if}{/each}{/snippet}
 
 <!-- prettier-ignore -->
-{#snippet parts(sentence: Sentence)}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text)}{:else if part.type === 'cue' && part.cue.kind !== 'choice' && part.cue.kind !== 'pace'}{@render chip(part.cue)}{/if}{/each}{/snippet}
+{#snippet parts(sentence: Sentence, paths?: string[])}{#each sentence.parts as part, at (at)}{#if part.type === 'text'}{@render inline(part.text, paths)}{:else if part.type === 'cue' && part.cue.kind !== 'choice' && part.cue.kind !== 'pace'}{@render chip(part.cue)}{/if}{/each}{/snippet}
 <!-- prettier-ignore -->
 {#snippet chip(cue: Cue)}<button class="mx-0.5 inline-flex items-center rounded border bg-muted px-1 align-baseline font-mono text-[11px] text-link hover:bg-accent" title={cueTitle(cue)} onclick={(event) => { event.stopPropagation(); void host.runCue(cue); }}>{cueLabel(cue)}</button>{/snippet}
 
@@ -279,11 +280,11 @@
                   )}
                   onclick={() => host.play(message.id, index)}
                   onkeydown={(event) => handleKeydown(event, message, index)}
-                  ><!-- prettier-ignore -->{@render parts(sentence)}</span
+                  ><!-- prettier-ignore -->{@render parts(sentence, message.paths)}</span
                 >{' '}
               {:else}
                 <!-- Voice off: plain text, only the cues are links -->
-                <span class="px-0.5">{@render parts(sentence)}</span>{' '}
+                <span class="px-0.5">{@render parts(sentence, message.paths)}</span>{' '}
               {/if}
             {/each}
           </div>

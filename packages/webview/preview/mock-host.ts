@@ -408,6 +408,11 @@ const SCENES: Record<string, Partial<ReviewState>> = {
       }
     ]
   },
+  light: {
+    ...review,
+    depth: 'light',
+    blocks: review.blocks.filter((block) => !block.hunks.includes('H4'))
+  },
   thinking: { ...review, status: 'thinking', activity: 'Searching “getThread”' },
   recording: {
     ...review,

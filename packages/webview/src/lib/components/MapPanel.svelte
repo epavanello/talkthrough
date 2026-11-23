@@ -38,12 +38,14 @@
         }))
   );
   const tree = $derived(fileTree(app.state.files));
+  const outside = $derived(app.filesOutside);
+  const outsideIds = $derived(outside.flatMap((file) => file.hunks));
   const step = $derived(new Set(app.state.step));
   const summary = $derived(
     app.mapView !== 'flow'
       ? `${app.state.files.length} files`
       : app.state.blocks.length
-        ? `${app.state.blocks.length} blocks · ${app.state.hotspots.length} hotspots`
+        ? `${app.state.blocks.length} blocks · ${app.state.hotspots.length} hotspots${outside.length ? ` · ${outside.length} files outside` : ''}`
         : app.isPreparing
           ? 'Claude is drawing it…'
           : app.state.files.length
@@ -295,6 +297,36 @@
             {/each}
           {/if}
         {/each}
+        {#if outside.length}
+          {@const isExpanded = toggled['outside'] ?? false}
+          <div
+            class="mt-1 flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent"
+            title="A light review: Claude left these out. Open one to see its diff, or ask Claude about it."
+          >
+            <button
+              class="shrink-0"
+              title="Show or hide them"
+              aria-label="Show or hide the files outside the map"
+              aria-expanded={isExpanded}
+              onclick={() => (toggled['outside'] = !isExpanded)}
+            >
+              {@render chevron(isExpanded)}
+            </button>
+            {@render groupState(outsideIds, 'Outside the map')}
+            <button
+              class="min-w-0 flex-1 truncate text-left text-muted-foreground"
+              onclick={() => (toggled['outside'] = !isExpanded)}
+            >
+              Outside the map
+            </button>
+            <span class="shrink-0 tabular-nums text-muted-foreground">{outside.length} files</span>
+          </div>
+          {#if isExpanded}
+            {#each outside as file (file.path)}
+              {@render fileRow(file, 1.25, true)}
+            {/each}
+          {/if}
+        {/if}
       {:else if app.mapView === 'tree'}
         {@render dirRows(tree, 0.25)}
       {:else}

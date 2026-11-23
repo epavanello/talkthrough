@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import {
   CHOICES,
   EMPTY_STATE,
+  hunksInReview,
   isPreparing,
   kindOf,
   type Block,
@@ -20,6 +21,7 @@ import {
   type ChatMessage,
   type Choice,
   type Cue,
+  type Depth,
   type Hotspot,
   type Hunk,
   type HunkState,
@@ -32,7 +34,7 @@ import {
 import { changeCounts, changesHead, currentBranch, loadChanges, loadTour } from './changes';
 import { checkoutHere, reviewWorktree } from './checkout';
 import { ClaudeProcess, claudeArgs } from './claude';
-import { cuesOf, parseReply } from './cues';
+import { codePaths, cuesOf, parseReply } from './cues';
 import { DELTA_TITLE, carryOver } from './delta';
 import { hunksAt, indexPatch, parsePatch, renderPatch, type ParsedFile } from './patch';
 import { Player, SaySpeaker, ping } from './player';
@@ -81,15 +83,22 @@ type LocalInput = {
   number: number;
   title: string;
 };
-/** `focus`: what the person wants to know above all ("could anything break?"), told to Claude. */
+/**
+ * `focus`: what the person wants to know above all ("could anything break?"), told to Claude.
+ * `depth`: light leaves out of the map what the goal doesn't need.
+ */
 export type StartInput =
-  | { kind: 'github'; pr: string; repo?: string; focus?: string }
+  | { kind: 'github'; pr: string; repo?: string; focus?: string; depth?: Depth }
   | LocalInput
-  | { kind: 'changes'; scope: ChangeScope; repo?: string; focus?: string }
+  | { kind: 'changes'; scope: ChangeScope; repo?: string; focus?: string; depth?: Depth }
   | { kind: 'tour'; question: string; repo?: string };
 
 /** The focus a start asks for, if any. */
 const focusIn = (input: StartInput) => ('focus' in input ? (input.focus ?? '') : '').trim();
+
+/** A review's depth: full unless it was started light. */
+const depthIn = (input: StartInput): Depth =>
+  'depth' in input && input.depth === 'light' ? 'light' : 'full';
 
 export interface StartOptions {
   /** Run this instead of the installed CLI (tests). */
@@ -212,7 +221,7 @@ async function lastReplyIn(transcript: string) {
 }
 
 function summaryOf(review: SavedReview): ReviewSummary {
-  const ids = Object.keys(review.hunks);
+  const ids = hunksInReview({ ...review, depth: depthIn(review.input) });
   return {
     id: review.id,
     kind: kindOf(review.loaded.info),
@@ -509,6 +518,7 @@ export class ReviewSession implements vscode.Disposable {
     this.replaceState({
       status,
       pr: saved.loaded.info,
+      depth: depthIn(saved.input),
       files,
       hunks,
       coverage,
@@ -570,7 +580,7 @@ export class ReviewSession implements vscode.Disposable {
       this.viewed = new Set();
       this.nextId = 1;
       const { files, hunks } = indexPatch(parsed);
-      Object.assign(this.state, { pr: loaded.info, files, hunks });
+      Object.assign(this.state, { pr: loaded.info, depth: depthIn(input), files, hunks });
       this.state.coverage = this.withViewed({});
       void this.ctx.workspaceState.update(OPEN_KEY, id);
       this.touch();
@@ -770,7 +780,7 @@ export class ReviewSession implements vscode.Disposable {
       language: language(),
       model: config().get<string>('model', ''),
       effort: config().get<string>('effort', ''),
-      systemPrompt: systemPrompt(language(), hasBrowser, kind),
+      systemPrompt: systemPrompt(language(), hasBrowser, kind, this.state.depth),
       name: `Talkthrough · ${kind === 'pr' ? `PR #${pr.number}: ` : kind === 'tour' ? 'Tour: ' : ''}${pr.title}`.slice(
         0,
         100
@@ -1075,7 +1085,8 @@ export class ReviewSession implements vscode.Disposable {
     this.isAwaitingDictation = false;
     this.state.isRecording = false;
     this.state.draft = '';
-    this.player.stop();
+    // Next lets the voice finish: the next block is read after it
+    if (flat(prompt) !== NEXT) this.player.stop();
     this.addMessage('user', prompt, { isDictated, isAuto });
     this.setStatus('thinking', null);
     this.track('Thinking');
@@ -1104,7 +1115,7 @@ export class ReviewSession implements vscode.Disposable {
     }
     // Never talk over the person while they dictate: the cues still move the editor
     const isSilent = !this.state.isSpeechOn || this.state.isRecording;
-    this.player.play(message, 0, isSilent);
+    this.player.enqueue(message, isSilent);
   }
 
   /** The window lost focus: the voice pauses where it is. */
@@ -1118,10 +1129,11 @@ export class ReviewSession implements vscode.Disposable {
   private back() {
     const unread = this.unread;
     this.unread = null;
+    const isFree = this.state.isSpeechOn && !this.state.isRecording;
+    // A voice paused away goes on first; a reply that came meanwhile is read after it
+    if (this.isPausedAway && isFree) this.player.resume();
     if (unread && this.state.messages.at(-1) === unread && !this.state.isRecording)
-      this.player.play(unread, 0, !this.state.isSpeechOn);
-    else if (this.isPausedAway && this.state.isSpeechOn && !this.state.isRecording)
-      this.player.resume();
+      this.player.enqueue(unread, !this.state.isSpeechOn);
     this.isPausedAway = false;
   }
 
@@ -1181,9 +1193,18 @@ export class ReviewSession implements vscode.Disposable {
       ...(flags.isDictated ? { isDictated: true } : {}),
       ...(flags.isAuto ? { isAuto: true } : {})
     };
+    if (role === 'claude') message.paths = this.realPaths(text);
     this.state.messages = [...this.state.messages, message];
     this.touch();
     return message;
+  }
+
+  /** The paths a reply writes as code that are files of the PR or the repository. */
+  private realPaths(text: string) {
+    const repo = this.loaded?.info.repo;
+    if (!repo) return [];
+    const files = new Set(this.state.files.map((file) => file.path));
+    return codePaths(text).filter((file) => files.has(file) || existsSync(path.join(repo, file)));
   }
 
   private note(text: string) {
@@ -1210,12 +1231,14 @@ export class ReviewSession implements vscode.Disposable {
   private context(isPrompt = false) {
     const { coverage, hunks, step, blocks } = this.state;
     const isTour = kindOf(this.state.pr) === 'tour';
-    const ids = Object.keys(hunks);
+    const ids = hunksInReview(this.state);
     const count = (state: HunkState) =>
       ids.filter((id) => (coverage[id] ?? 'todo') === state).length;
     const lines = [
       `${isTour ? 'Stops' : 'Hunks'}: ${count('ok')} ok, ${count('explained')} explained, ${count('todo')} todo, of ${ids.length}.`
     ];
+    const outside = this.state.depth === 'light' && blocks.length ? this.outsideMap() : null;
+    if (outside) lines.push(`A light review: ${outside} outside the map.`);
     if (isPrompt) lines.push(...this.pendingNotes.splice(0));
     if (step.length)
       lines.push(
@@ -1413,7 +1436,8 @@ export class ReviewSession implements vscode.Disposable {
 
   private setMap(map: MapInput): ToolResult {
     if (!Array.isArray(map.blocks)) return { text: 'blocks is required.', isError: true };
-    const problems = mapProblems(map, Object.keys(this.state.hunks));
+    const isLight = this.state.depth === 'light';
+    const problems = mapProblems(map, Object.keys(this.state.hunks), isLight);
     if (problems.length)
       return { text: `The map was not set:\n${problems.join('\n')}`, isError: true };
     this.state.blocks = map.blocks.map((block, index) => ({
@@ -1429,9 +1453,19 @@ export class ReviewSession implements vscode.Disposable {
       anchors: hotspot.anchors ?? []
     }));
     this.touch();
+    const outside = isLight ? this.outsideMap() : null;
     return {
-      text: `Map set: ${this.state.blocks.length} blocks, ${this.state.hotspots.length} hotspots.`
+      text: `Map set: ${this.state.blocks.length} blocks, ${this.state.hotspots.length} hotspots.${outside ? ` Outside it: ${outside}.` : ''}`
     };
+  }
+
+  /** A light review's hunks left out of the map, as a few words; null when none is. */
+  private outsideMap() {
+    const inMap = new Set(hunksInReview(this.state));
+    const files = this.state.files.filter((file) => file.hunks.some((id) => !inMap.has(id)));
+    if (!files.length) return null;
+    const hunks = Object.keys(this.state.hunks).length - inMap.size;
+    return `${hunks} hunk${hunks === 1 ? '' : 's'} in ${files.length} file${files.length === 1 ? '' : 's'}`;
   }
 
   /** A tour's stops, checked against the code: each one a range of lines in a file there. */
@@ -1536,10 +1570,11 @@ export class ReviewSession implements vscode.Disposable {
     return true;
   }
 
-  send(text: string) {
+  /** `isVoiceKept`: the voice goes on (Next), the reply waits for it. */
+  send(text: string, isVoiceKept = false) {
     if (!text.trim() || this.isWaitingForMap()) return;
     if (!this.claude) return this.note('No Claude session is running: resume the review first.');
-    this.player.stop();
+    if (!isVoiceKept) this.player.stop();
     this.claude.submit(text);
   }
 
@@ -1609,7 +1644,7 @@ export class ReviewSession implements vscode.Disposable {
     );
     this.touch();
     void this.syncViewed();
-    this.send(NEXT);
+    this.send(NEXT, true);
   }
 
   interrupt() {

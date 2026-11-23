@@ -115,15 +115,52 @@ export const cuesOf = (sentences: Sentence[]) =>
     sentence.parts.flatMap((part) => (part.type === 'cue' ? [part.cue] : []))
   );
 
-/** Words as the voice should say them: no markdown, links, paths or bullets. */
-export function speakable(text: string) {
-  return text
-    .replace(/\[\[\s*(?:show|open|refs|page|mark|choice|pace)\s[^\n]*?\]\](?![/\]])/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/`([^`]*)`/g, (_, code: string) => code.replace(/^.*\//, ''))
-    .replace(/(\*\*|__|\*|_|~~)(\S[\s\S]*?\S|\S)\1/g, '$2')
-    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
-    .replace(/^#+\s*/gm, '')
-    .replace(/\s+/g, ' ')
+/**
+ * Inline code as the voice says it: a path by its file's name, no leading dot, no extension, other
+ * dots as spaces (`src/.env` → "env", `migrate.mts` → "migrate", `.env.example` → "env example").
+ * A voice reads a dot as a word ("punto"), which breaks the sentence.
+ */
+function spokenCode(code: string) {
+  return code
+    .replace(/^.*\//, '')
+    .replace(/^\.+/, '')
+    .replace(/(\w)\.[a-z][a-z0-9]{0,4}$/i, (match, last: string) =>
+      /\.(?:env|example|local|sample)$/i.test(match) ? match : last
+    )
+    .replace(/\.+/g, ' ')
     .trim();
 }
+
+/** Words as the voice should say them: no markdown, links, paths or bullets. */
+export function speakable(text: string) {
+  return (
+    text
+      .replace(/\[\[\s*(?:show|open|refs|page|mark|choice|pace)\s[^\n]*?\]\](?![/\]])/g, '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/`([^`]*)`/g, (_, code: string) => spokenCode(code))
+      // Dots and colons inside a word (`chat.ts`, `talkthrough:next`, `a::b`) are read as a pause or a
+      // word: a space instead. A time (10:30) and a sentence's own colon stay
+      .replace(/(?<=[\p{L}\p{N}_])(?:\.|:+)(?=[\p{L}_])/gu, ' ')
+      .replace(/(\*\*|__|\*|_|~~)(\S[\s\S]*?\S|\S)\1/g, '$2')
+      .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+      .replace(/^#+\s*/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/**
+ * What a text writes as a path in code (`src/a.ts`, `./a.ts:40`: a dot or a slash): the path, its
+ * line, and where the code starts in the text.
+ */
+export function codeRefs(text: string) {
+  return [...text.matchAll(/`([^`\s]+)`/g)].flatMap((match) => {
+    const [, path = '', line] = match[1].match(/^(?:\.?\/)?(.+?)(?::(\d+))?$/) ?? [];
+    return /[./]/.test(path)
+      ? [{ path, line: line ? Number(line) : null, index: match.index }]
+      : [];
+  });
+}
+
+/** The paths a reply writes as code, once each. */
+export const codePaths = (text: string) => [...new Set(codeRefs(text).map((ref) => ref.path))];

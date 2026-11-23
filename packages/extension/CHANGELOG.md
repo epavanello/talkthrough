@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0
+
+- A Light review for large pull requests: switch Review to Light under the goal, and Claude reads the
+  description and the files that matter for your goal, mapping only those. Lockfiles and generated
+  files are never read. The other files stay listed under "Outside the map", where you can open their
+  diff or ask Claude to add one; progress counts only the hunks in the map.
+- A link to a file you have open in a tab of your own opens it at its line again, in Cursor too,
+  instead of failing with "Could NOT open editor".
+- Claude names every file by its whole path from the repository root. A name in code that is no file
+  of the repository (`services.ts` without its folder) stays code instead of a link that fails.
+- A file Claude names in code opens beside as the voice gets to it, as a file it shows does.
+- Next no longer cuts the voice short: it finishes what it is saying while Claude prepares the next
+  block, which it reads right after.
+- A file named in the middle of a sentence no longer breaks it: the voice says the sentence in one
+  go, and the file opens as it gets there.
+- The voice says a file name in code without its dots: `.env` is "env", `migrate.mts` is "migrate".
+- A dot or colon inside a word (`chat.ts`, `talkthrough:next`) is read as a space, with no pause.
+
 ## 0.9.0
 
 - Every reply of Claude carries a pace badge: 🥱 Skim for routine you can skip without reading

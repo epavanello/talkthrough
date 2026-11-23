@@ -71,7 +71,7 @@
   const handleKeydown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' || !isPrRef(text) || blocker) return;
     event.preventDefault();
-    void host.start(text.trim(), app.takeFocus());
+    void host.start(text.trim(), app.takeFocus(), app.depth);
   };
 </script>
 
@@ -124,7 +124,7 @@
     <button
       class="flex items-center gap-2 rounded border border-ring px-2 py-1.5 text-left hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
       disabled={Boolean(blocker)}
-      onclick={() => host.start(text.trim(), app.takeFocus())}
+      onclick={() => host.start(text.trim(), app.takeFocus(), app.depth)}
     >
       <ArrowRight class="size-3.5 shrink-0 text-link" />
       <span class="min-w-0 flex-1 truncate"
@@ -171,7 +171,7 @@
             title={review
               ? 'Go on with this review: Claude remembers it'
               : 'Start a review of this pull request'}
-            onclick={() => host.start(pr.url, app.takeFocus())}
+            onclick={() => host.start(pr.url, app.takeFocus(), app.depth)}
           >
             <span class="flex items-baseline gap-1.5">
               <span class="shrink-0 text-muted-foreground tabular-nums">#{pr.number}</span>

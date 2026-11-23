@@ -1,8 +1,10 @@
 import {
   EMPTY_STATE,
   SHORTCUTS,
+  hunksInReview,
   isPreparing,
   kindOf,
+  type Depth,
   type HunkState,
   type ReviewKind,
   type PullFilter,
@@ -17,6 +19,7 @@ export type MapView = 'flow' | 'tree' | 'list';
 interface Saved {
   mapView?: MapView;
   pullFilter?: PullFilter;
+  depth?: Depth;
 }
 
 /** The review as the host last sent it, plus what only the webview cares about. */
@@ -76,6 +79,15 @@ class App {
     this.#remember({ pullFilter: filter });
   }
 
+  /** The start screen's depth for the next review: full, or light. */
+  get depth() {
+    return this.#saved.depth ?? 'full';
+  }
+
+  set depth(depth: Depth) {
+    this.#remember({ depth });
+  }
+
   /** A pull request, your own changes, or a tour. */
   get kind() {
     return kindOf(this.state.pr);
@@ -128,8 +140,17 @@ class App {
     return ids.some((id) => this.stateOf(id) !== 'todo') ? 'explained' : 'todo';
   }
 
+  /** A light review's files with hunks left out of the map (none before it is drawn). */
+  get filesOutside() {
+    if (this.state.depth !== 'light' || !this.state.blocks.length) return [];
+    const inMap = new Set(hunksInReview(this.state));
+    return this.state.files
+      .map((file) => ({ ...file, hunks: file.hunks.filter((id) => !inMap.has(id)) }))
+      .filter((file) => file.hunks.length);
+  }
+
   get counts() {
-    const ids = Object.keys(this.state.hunks);
+    const ids = hunksInReview(this.state);
     return {
       total: ids.length,
       ok: ids.filter((id) => this.stateOf(id) === 'ok').length,

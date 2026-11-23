@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Compass, FileDiff, GitBranch, GitCommitHorizontal } from '@lucide/svelte';
-  import type { ChangeScope, LocalChanges } from '@talkthrough/shared';
+  import type { ChangeScope, Depth, LocalChanges } from '@talkthrough/shared';
   import { app } from '$lib/app.svelte';
   import { Button } from '$lib/components/ui/button';
   import { host } from '$lib/rpc';
+  import { cn } from '$lib/utils';
 
   const SCOPES: {
     scope: ChangeScope;
@@ -36,6 +37,20 @@
         changes.base
           ? `nothing on this branch that ${changes.base} doesn't have`
           : 'no main or master branch to compare with'
+    }
+  ];
+
+  /** How far a new review goes: the switch under the goal (a kept review keeps its own). */
+  const DEPTHS: { value: Depth; label: string; hint: string }[] = [
+    {
+      value: 'full',
+      label: 'Full',
+      hint: 'Claude reads the whole diff and maps every hunk into blocks.'
+    },
+    {
+      value: 'light',
+      label: 'Light',
+      hint: 'Claude reads the description and the files that matter for your goal, and maps only those: the others stay listed outside the map. For large pull requests.'
     }
   ];
 
@@ -78,6 +93,33 @@
       What you want to know above all: Claude starts from it, whatever you pick below.
     {/if}
   </p>
+  <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span id="depth-title">Review</span>
+    <div
+      class="flex items-center rounded border p-px text-[11px]"
+      role="group"
+      aria-labelledby="depth-title"
+    >
+      {#each DEPTHS as depth (depth.value)}
+        <button
+          class={cn(
+            'rounded-sm px-1.5 leading-4',
+            app.depth === depth.value
+              ? 'bg-secondary text-secondary-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+          title={depth.hint}
+          aria-pressed={app.depth === depth.value}
+          onclick={() => (app.depth = depth.value)}
+        >
+          {depth.label}
+        </button>
+      {/each}
+    </div>
+    <span class="min-w-0 truncate">
+      {app.depth === 'light' ? 'only what matters for the goal' : 'every hunk'}
+    </span>
+  </div>
 </section>
 
 <section class="flex flex-col gap-3 px-3 pt-3" aria-labelledby="target-title">
@@ -125,7 +167,7 @@
             note: `${count} file${count === 1 ? '' : 's'}`
           }}
           disabled={Boolean(blocker) || !count}
-          onclick={() => host.reviewChanges(one.scope, app.takeFocus())}
+          onclick={() => host.reviewChanges(one.scope, app.takeFocus(), app.depth)}
         >
           {one.label}
           <span class="text-xs tabular-nums text-muted-foreground">{count}</span>

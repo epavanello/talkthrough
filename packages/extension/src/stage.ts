@@ -44,6 +44,43 @@ function highlightType() {
 export const isEditorAreaEmpty = () =>
   vscode.window.tabGroups.all.every((group) => group.tabs.length === 0);
 
+/** The column of a tab that already holds `uri` as a text file, if any. */
+function columnHolding(uri: vscode.Uri) {
+  const key = uri.toString();
+  return vscode.window.tabGroups.all.find((group) =>
+    group.tabs.some(
+      (tab) => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === key
+    )
+  )?.viewColumn;
+}
+
+/**
+ * Shows `uri` in the tab that already holds it, else in `column`. Cursor fails `showTextDocument`
+ * ("Could NOT open editor") on a file pinned in a tab of its own: `vscode.open` then shows it, and
+ * its editor is found among the visible ones.
+ */
+export async function showFile(
+  uri: vscode.Uri,
+  column: vscode.ViewColumn,
+  options: Omit<vscode.TextDocumentShowOptions, 'viewColumn'>
+) {
+  const viewColumn = columnHolding(uri) ?? column;
+  try {
+    return await vscode.window.showTextDocument(uri, { ...options, viewColumn });
+  } catch (error) {
+    await vscode.commands.executeCommand('vscode.open', uri, { ...options, viewColumn });
+    const key = uri.toString();
+    const editor =
+      vscode.window.activeTextEditor?.document.uri.toString() === key
+        ? vscode.window.activeTextEditor
+        : vscode.window.visibleTextEditors.find((one) => one.document.uri.toString() === key);
+    if (!editor) throw error;
+    if (options.selection)
+      editor.selection = new vscode.Selection(options.selection.start, options.selection.end);
+    return editor;
+  }
+}
+
 export class Stage implements vscode.Disposable {
   /** The diff's highlight (column one) and the side file's (column two). */
   private readonly main = highlightType();
@@ -80,18 +117,10 @@ export class Stage implements vscode.Disposable {
     // Beside the code; alone, the whole area
     const column = isEditorAreaEmpty() ? vscode.ViewColumn.One : wanted;
     const uri = await headUri(context.pr, cue.path);
-    const editor = await vscode.window.showTextDocument(uri, {
-      viewColumn: column,
-      preserveFocus: true,
-      preview: true
-    });
-    if (column === vscode.ViewColumn.One) this.onMain();
-    this.highlight(
-      column === vscode.ViewColumn.One ? this.main : this.side,
-      editor,
-      cue.start,
-      cue.end
-    );
+    const editor = await showFile(uri, column, { preserveFocus: true, preview: true });
+    const isMain = (editor.viewColumn ?? column) === vscode.ViewColumn.One;
+    if (isMain) this.onMain();
+    this.highlight(isMain ? this.main : this.side, editor, cue.start, cue.end);
   }
 
   private async refs(context: StageContext, cue: Cue) {
@@ -103,8 +132,7 @@ export class Stage implements vscode.Disposable {
         uri,
         position
       )) ?? [];
-    const editor = await vscode.window.showTextDocument(uri, {
-      viewColumn: vscode.ViewColumn.Two,
+    const editor = await showFile(uri, vscode.ViewColumn.Two, {
       preserveFocus: false,
       preview: true,
       selection: new vscode.Range(position, position)
